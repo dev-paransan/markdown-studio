@@ -1,0 +1,12 @@
+{
+  "appId": "com.markdownstudio.app",
+  "appName": "Markdown Studio",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#ffffff"
+  }
+}

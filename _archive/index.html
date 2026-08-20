@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Markdown Editor</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-alt: #f6f8fa;
+    --bg-toolbar: #fbfbfc;
+    --border: #e1e4e8;
+    --text: #24292f;
+    --text-muted: #57606a;
+    --accent: #0969da;
+    --code-bg: #f6f8fa;
+    --sel: #b3d4fc;
+    /* editor token colors */
+    --tok-head: #0550ae;
+    --tok-bold: #953800;
+    --tok-italic: #6639ba;
+    --tok-code: #0a3069;
+    --tok-link: #0969da;
+    --tok-quote: #57606a;
+    --tok-list: #cf222e;
+    --tok-fence: #6e7781;
+    /* code highlight */
+    --hl-keyword: #cf222e;
+    --hl-string: #0a3069;
+    --hl-comment: #6e7781;
+    --hl-number: #0550ae;
+    --hl-func: #8250df;
+  }
+  [data-theme="dark"] {
+    --bg: #0d1117;
+    --bg-alt: #161b22;
+    --bg-toolbar: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --code-bg: #161b22;
+    --sel: #264f78;
+    --tok-head: #79c0ff;
+    --tok-bold: #ffa657;
+    --tok-italic: #d2a8ff;
+    --tok-code: #a5d6ff;
+    --tok-link: #58a6ff;
+    --tok-quote: #8b949e;
+    --tok-list: #ff7b72;
+    --tok-fence: #8b949e;
+    --hl-keyword: #ff7b72;
+    --hl-string: #a5d6ff;
+    --hl-comment: #8b949e;
+    --hl-number: #79c0ff;
+    --hl-func: #d2a8ff;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ---------- Toolbar ---------- */
+  #toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--bg-toolbar);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    flex: 0 0 auto;
+  }
+  #toolbar .title {
+    font-weight: 600;
+    margin-right: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #toolbar .spacer { flex: 1; }
+  button.tb {
+    font: inherit;
+    font-size: 13px;
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    border-radius: 6px;
+    cursor: pointer;
+    line-height: 1.2;
+  }
+  button.tb:hover { background: var(--bg-alt); border-color: var(--accent); }
+  button.tb:active { transform: translateY(1px); }
+  button.tb:disabled { opacity: .4; cursor: default; }
+  button.tb:disabled:hover { background: var(--bg); border-color: var(--border); }
+  .sep { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
+  #status { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+
+  /* ---------- App layout (sidebar + work area) ---------- */
+  #appBody { flex: 1 1 auto; display: flex; min-height: 0; }
+
+  #sidebar {
+    width: 220px;
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-alt);
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+    transition: width .15s ease;
+  }
+  #sidebar.collapsed { width: 40px; }
+  #sidebarHeader {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px;
+    border-bottom: 1px solid var(--border);
+    flex: 0 0 auto;
+  }
+  #sidebarHeader .label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  #sidebar.collapsed #sidebarHeader .label { display: none; }
+  #btnSidebarToggle {
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    font-size: 15px;
+    padding: 4px 6px;
+    border-radius: 6px;
+    color: var(--text-muted);
+    line-height: 1;
+    flex: 0 0 auto;
+  }
+  #btnSidebarToggle:hover { background: var(--bg); color: var(--text); }
+  #recentList {
+    list-style: none;
+    margin: 0;
+    padding: 4px;
+    overflow-y: auto;
+    flex: 1 1 auto;
+  }
+  #sidebar.collapsed #recentList { display: none; }
+  #recentList li {
+    padding: 7px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    margin-bottom: 2px;
+  }
+  #recentList li:hover { background: var(--bg); }
+  #recentList li .rname {
+    display: block;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #recentList li .rtime { display: block; font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+  #recentList li.no-handle { opacity: .55; }
+  #recentList .empty-hint { padding: 10px 9px; font-size: 12px; color: var(--text-muted); cursor: default; }
+  #recentList .empty-hint:hover { background: transparent; }
+
+  /* ---------- Work area / tab bar ---------- */
+  #workArea { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
+  #tabBar {
+    display: flex;
+    align-items: stretch;
+    flex: 0 0 auto;
+    background: var(--bg-toolbar);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 8px 7px 12px;
+    font-size: 13px;
+    white-space: nowrap;
+    border-right: 1px solid var(--border);
+    cursor: pointer;
+    color: var(--text-muted);
+    max-width: 220px;
+    flex: 0 0 auto;
+  }
+  .tab .tname { overflow: hidden; text-overflow: ellipsis; }
+  .tab.active { color: var(--text); background: var(--bg); }
+  .tab .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent); flex: 0 0 auto; display: none;
+  }
+  .tab.dirty .dot { display: inline-block; }
+  .tab .tclose {
+    border: 0; background: transparent; color: inherit; cursor: pointer;
+    font-size: 14px; line-height: 1; padding: 2px 5px; border-radius: 4px; flex: 0 0 auto;
+  }
+  .tab .tclose:hover { background: var(--border); }
+
+  #emptyState {
+    display: none;
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 20px;
+  }
+  #emptyState .big { font-size: 15px; }
+  #workArea.empty #emptyState { display: flex; }
+  #workArea.empty #main { display: none; }
+  #workArea.empty #tabBar { display: none; }
+
+  /* ---------- Layout ---------- */
+  #main { flex: 1 1 auto; display: flex; min-height: 0; }
+  .pane { flex: 1 1 50%; min-width: 0; display: flex; flex-direction: column; }
+  #editorPane { border-right: 1px solid var(--border); }
+  .pane-head {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--text-muted);
+    padding: 6px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-alt);
+    flex: 0 0 auto;
+    user-select: none;
+  }
+
+  /* ---------- Editor overlay ---------- */
+  #editorWrap { position: relative; flex: 1 1 auto; overflow: hidden; }
+  #editor, #backdrop {
+    margin: 0;
+    border: 0;
+    padding: 16px;
+    font-family: "SFMono-Regular", "Cascadia Code", Consolas, "D2Coding", monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    tab-size: 2;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    letter-spacing: 0;
+  }
+  #backdrop {
+    position: absolute;
+    inset: 0;
+    overflow: auto;
+    color: var(--text);
+    pointer-events: none;
+    background: var(--bg);
+    z-index: 1;
+  }
+  #editor {
+    position: absolute;
+    inset: 0;
+    resize: none;
+    overflow: auto;
+    background: transparent;
+    color: transparent;
+    caret-color: var(--accent);
+    z-index: 2;
+    outline: none;
+  }
+  #editor::selection { background: var(--sel); }
+  #backdrop .tok-head   { color: var(--tok-head); font-weight: 700; }
+  #backdrop .tok-bold   { color: var(--tok-bold); font-weight: 700; }
+  #backdrop .tok-italic { color: var(--tok-italic); font-style: italic; }
+  #backdrop .tok-code   { color: var(--tok-code); }
+  #backdrop .tok-link   { color: var(--tok-link); text-decoration: underline; }
+  #backdrop .tok-quote  { color: var(--tok-quote); font-style: italic; }
+  #backdrop .tok-list   { color: var(--tok-list); font-weight: 700; }
+  #backdrop .tok-fence  { color: var(--tok-fence); }
+  #backdrop .tok-hr     { color: var(--tok-fence); }
+
+  /* ---------- Preview ---------- */
+  #preview {
+    flex: 1 1 auto;
+    overflow: auto;
+    padding: 16px 28px;
+    line-height: 1.7;
+  }
+  #preview > *:first-child { margin-top: 0; }
+  #preview h1, #preview h2 { border-bottom: 1px solid var(--border); padding-bottom: .3em; }
+  #preview h1 { font-size: 1.9em; } #preview h2 { font-size: 1.5em; }
+  #preview h3 { font-size: 1.25em; } #preview h4 { font-size: 1.05em; }
+  #preview a { color: var(--accent); text-decoration: none; }
+  #preview a:hover { text-decoration: underline; }
+  #preview code {
+    background: var(--code-bg);
+    padding: .2em .4em;
+    border-radius: 5px;
+    font-family: "SFMono-Regular", Consolas, "D2Coding", monospace;
+    font-size: .9em;
+  }
+  #preview pre {
+    background: var(--code-bg);
+    padding: 14px 16px;
+    border-radius: 8px;
+    overflow: auto;
+    border: 1px solid var(--border);
+  }
+  #preview pre code { background: none; padding: 0; font-size: .88em; line-height: 1.5; }
+  #preview blockquote {
+    margin: 0 0 16px;
+    padding: 0 1em;
+    color: var(--text-muted);
+    border-left: .25em solid var(--border);
+  }
+  #preview table { border-collapse: collapse; margin-bottom: 16px; display: block; overflow: auto; }
+  #preview th, #preview td { border: 1px solid var(--border); padding: 6px 13px; }
+  #preview tr:nth-child(2n) { background: var(--bg-alt); }
+  #preview img { max-width: 100%; }
+  #preview hr { border: 0; border-top: 1px solid var(--border); margin: 24px 0; }
+  #preview ul, #preview ol { padding-left: 2em; }
+  #preview li.task { list-style: none; margin-left: -1.4em; }
+  #preview li.task input { margin-right: .4em; }
+  /* code token colors */
+  .hl-kw { color: var(--hl-keyword); }
+  .hl-str { color: var(--hl-string); }
+  .hl-com { color: var(--hl-comment); font-style: italic; }
+  .hl-num { color: var(--hl-number); }
+  .hl-fn { color: var(--hl-func); }
+
+  /* ---------- Responsive ---------- */
+  #viewTabs { display: none; }
+  @media (max-width: 760px) {
+    #main.mobile #editorPane { display: none; }
+    #main.mobile.show-preview #editorPane { display: none; }
+    #main.mobile.show-editor #previewPane { display: none; }
+    #main.mobile:not(.show-preview) #previewPane { display: none; }
+    #main.mobile.show-preview #previewPane { display: flex; }
+    #main.mobile.show-editor #editorPane { display: flex; }
+    #editorPane { border-right: 0; }
+    #viewTabs { display: inline-flex; }
+
+    #appBody { position: relative; }
+    #sidebar:not(.collapsed) {
+      position: absolute;
+      top: 0; bottom: 0; left: 0;
+      width: 200px;
+      z-index: 40;
+      box-shadow: 2px 0 10px rgba(0,0,0,.25);
+    }
+  }
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 8px 16px; border-radius: 8px;
+    font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50;
+  }
+  .toast.show { opacity: .95; }
+
+  @media print {
+    body * { visibility: hidden; }
+    #preview, #preview * { visibility: visible; }
+    #preview { position: absolute; inset: 0; overflow: visible; padding: 0; }
+    #preview pre, #preview code { background: #f6f8fa !important; }
+  }
+</style>
+</head>
+<body>
+  <div id="toolbar">
+    <span class="title">📝 Markdown Editor</span>
+    <button class="tb" id="btnOpen" title="열기 (Ctrl+O)">열기</button>
+    <button class="tb" id="btnSave" title="저장 (Ctrl+S)">저장</button>
+    <div class="sep"></div>
+    <button class="tb" id="btnBold" title="굵게 (Ctrl+B)"><b>B</b></button>
+    <button class="tb" id="btnItalic" title="기울임 (Ctrl+I)"><i>I</i></button>
+    <button class="tb" id="btnLink" title="링크 (Ctrl+K)">🔗</button>
+    <button class="tb" id="btnCode" title="코드블록">&lt;/&gt;</button>
+    <div class="sep"></div>
+    <button class="tb" id="btnExportHtml" title="HTML로 내보내기">HTML</button>
+    <button class="tb" id="btnExportPdf" title="인쇄/PDF로 저장">PDF</button>
+    <span class="spacer"></span>
+    <span id="viewTabs">
+      <button class="tb" id="tabEditor">편집</button>
+      <button class="tb" id="tabPreview">미리보기</button>
+    </span>
+    <button class="tb" id="btnTheme" title="다크/라이트 전환">🌙</button>
+    <span id="status"></span>
+  </div>
+
+  <div id="appBody">
+    <div id="sidebar">
+      <div id="sidebarHeader">
+        <button id="btnSidebarToggle" title="사이드바 접기/펼치기">☰</button>
+        <span class="label">최근 문서</span>
+      </div>
+      <ul id="recentList"></ul>
+    </div>
+    <div id="workArea">
+      <div id="tabBar"></div>
+      <div id="emptyState">
+        <div class="big">열려있는 문서가 없습니다</div>
+        <button class="tb" id="btnOpenEmpty">파일 열기</button>
+      </div>
+      <div id="main">
+        <div class="pane" id="editorPane">
+          <div class="pane-head">편집</div>
+          <div id="editorWrap">
+            <pre id="backdrop" aria-hidden="true"><code></code></pre>
+            <textarea id="editor" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" placeholder="# 여기에 마크다운을 작성하세요"></textarea>
+          </div>
+        </div>
+        <div class="pane" id="previewPane">
+          <div class="pane-head">미리보기</div>
+          <div id="preview"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <input type="file" id="fileInput" accept=".md,.markdown,.txt,text/markdown,text/plain" style="display:none">
+
+<script>
+"use strict";
+(function () {
+  const editor   = document.getElementById('editor');
+  const backdrop = document.getElementById('backdrop').querySelector('code');
+  const backEl   = document.getElementById('backdrop');
+  const preview  = document.getElementById('preview');
+  const status   = document.getElementById('status');
+  const main     = document.getElementById('main');
+  const toastEl  = document.getElementById('toast');
+  const fileInput= document.getElementById('fileInput');
+  const sidebar  = document.getElementById('sidebar');
+  const recentListEl = document.getElementById('recentList');
+  const tabBarEl = document.getElementById('tabBar');
+  const workArea = document.getElementById('workArea');
+
+  const THEME_KEY = 'md-editor-theme';
+
+  /* ============================================================
+   *  Multi-document (tab) state
+   * ==========================================================*/
+  let docs = [];       // { id, name, content, savedContent, handle, dirty }
+  let activeId = null;
+  let nextDocId = 1;
+
+  function getActiveDoc() { return docs.find(d => d.id === activeId) || null; }
+
+  /* ============================================================
+   *  HTML escaping
+   * ==========================================================*/
+  function escapeHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /* ============================================================
+   *  Code block syntax highlighter (lightweight, generic)
+   * ==========================================================*/
+  const KEYWORDS = new Set(("function return if else for while do switch case break continue " +
+    "var let const class new this typeof instanceof void delete in of try catch finally throw " +
+    "import export from default extends super async await yield static get set null true false " +
+    "def elif except import as pass lambda with global nonlocal print None True False and or not is " +
+    "public private protected static final void int float double boolean char string struct enum " +
+    "interface package fn impl mut match use pub crate self trait where type namespace using " +
+    "select insert update delete where join group order by from into values set").split(/\s+/));
+
+  function highlightCode(code) {
+    // token-safe: split into strings/comments/other, then keyword/number pass
+    let out = '';
+    let i = 0;
+    const n = code.length;
+    function isWord(c){ return /[A-Za-z0-9_$]/.test(c); }
+    while (i < n) {
+      const c = code[i];
+      const two = code.substr(i, 2);
+      // line comment
+      if (two === '//' || c === '#') {
+        let j = code.indexOf('\n', i); if (j === -1) j = n;
+        out += '<span class="hl-com">' + escapeHtml(code.slice(i, j)) + '</span>';
+        i = j; continue;
+      }
+      // block comment
+      if (two === '/*') {
+        let j = code.indexOf('*/', i + 2); j = (j === -1) ? n : j + 2;
+        out += '<span class="hl-com">' + escapeHtml(code.slice(i, j)) + '</span>';
+        i = j; continue;
+      }
+      // strings
+      if (c === '"' || c === "'" || c === '`') {
+        let j = i + 1;
+        while (j < n && code[j] !== c) { if (code[j] === '\\') j++; j++; }
+        j = Math.min(j + 1, n);
+        out += '<span class="hl-str">' + escapeHtml(code.slice(i, j)) + '</span>';
+        i = j; continue;
+      }
+      // numbers
+      if (/[0-9]/.test(c) && (i === 0 || !isWord(code[i-1]))) {
+        let j = i;
+        while (j < n && /[0-9a-fxA-FX._]/.test(code[j])) j++;
+        out += '<span class="hl-num">' + escapeHtml(code.slice(i, j)) + '</span>';
+        i = j; continue;
+      }
+      // words -> keyword or function call
+      if (isWord(c)) {
+        let j = i;
+        while (j < n && isWord(code[j])) j++;
+        const w = code.slice(i, j);
+        let k = j; while (k < n && code[k] === ' ') k++;
+        if (KEYWORDS.has(w)) out += '<span class="hl-kw">' + escapeHtml(w) + '</span>';
+        else if (code[k] === '(') out += '<span class="hl-fn">' + escapeHtml(w) + '</span>';
+        else out += escapeHtml(w);
+        i = j; continue;
+      }
+      out += escapeHtml(c);
+      i++;
+    }
+    return out;
+  }
+
+  /* ============================================================
+   *  Markdown parser -> HTML (for preview / export)
+   * ==========================================================*/
+  function parseInline(text) {
+    // Protect inline code spans first
+    const codes = [];
+    text = text.replace(/`([^`]+)`/g, (_, c) => {
+      codes.push('<code>' + escapeHtml(c) + '</code>');
+      return '\u0000' + (codes.length - 1) + '\u0000';
+    });
+    text = escapeHtml(text);
+    // images ![alt](src)
+    text = text.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+&quot;([^&]*)&quot;)?\)/g,
+      (_, alt, src, t) => `<img src="${src}" alt="${alt}"${t ? ` title="${t}"` : ''}>`);
+    // links [text](url)
+    text = text.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+&quot;([^&]*)&quot;)?\)/g,
+      (_, t, url, ti) => `<a href="${url}"${ti ? ` title="${ti}"` : ''}>${t}</a>`);
+    // bold + italic
+    text = text.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
+    text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+    text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    text = text.replace(/(^|[^\w])_([^_]+)_($|[^\w])/g, '$1<em>$2</em>$3');
+    // strikethrough
+    text = text.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+    // autolink bare urls
+    text = text.replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2">$2</a>');
+    // line break (two trailing spaces)
+    text = text.replace(/ {2,}\n/g, '<br>\n');
+    // restore code spans
+    text = text.replace(/\u0000(\d+)\u0000/g, (_, i) => codes[+i]);
+    return text;
+  }
+
+  function parseMarkdown(src) {
+    const lines = src.replace(/\r\n?/g, '\n').split('\n');
+    let html = '';
+    let i = 0;
+
+    function isBlank(l) { return /^\s*$/.test(l); }
+
+    while (i < lines.length) {
+      let line = lines[i];
+
+      // fenced code block
+      const fence = line.match(/^(\s*)(`{3,}|~{3,})\s*([\w+-]*)\s*$/);
+      if (fence) {
+        const marker = fence[2][0];
+        const lang = fence[3];
+        const buf = [];
+        i++;
+        while (i < lines.length && !new RegExp('^\\s*' + marker + '{3,}\\s*$').test(lines[i])) {
+          buf.push(lines[i]); i++;
+        }
+        i++; // closing fence
+        const code = buf.join('\n');
+        html += `<pre><code${lang ? ` class="language-${lang}"` : ''}>${highlightCode(code)}</code></pre>\n`;
+        continue;
+      }
+
+      // blank
+      if (isBlank(line)) { i++; continue; }
+
+      // heading
+      const h = line.match(/^(#{1,6})\s+(.*?)\s*#*\s*$/);
+      if (h) {
+        const lvl = h[1].length;
+        html += `<h${lvl}>${parseInline(h[2])}</h${lvl}>\n`;
+        i++; continue;
+      }
+
+      // horizontal rule
+      if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { html += '<hr>\n'; i++; continue; }
+
+      // blockquote (group consecutive)
+      if (/^\s*>/.test(line)) {
+        const buf = [];
+        while (i < lines.length && /^\s*>/.test(lines[i])) {
+          buf.push(lines[i].replace(/^\s*>\s?/, '')); i++;
+        }
+        html += `<blockquote>\n${parseMarkdown(buf.join('\n'))}</blockquote>\n`;
+        continue;
+      }
+
+      // table
+      if (line.includes('|') && i + 1 < lines.length &&
+          /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1]) && lines[i + 1].includes('-')) {
+        const header = splitRow(line);
+        const aligns = splitRow(lines[i + 1]).map(c => {
+          const l = c.startsWith(':'), r = c.endsWith(':');
+          return l && r ? 'center' : r ? 'right' : l ? 'left' : '';
+        });
+        i += 2;
+        let t = '<table>\n<thead><tr>';
+        header.forEach((c, k) => t += `<th${aligns[k] ? ` style="text-align:${aligns[k]}"` : ''}>${parseInline(c)}</th>`);
+        t += '</tr></thead>\n<tbody>\n';
+        while (i < lines.length && lines[i].includes('|') && !isBlank(lines[i])) {
+          const cells = splitRow(lines[i]);
+          t += '<tr>';
+          cells.forEach((c, k) => t += `<td${aligns[k] ? ` style="text-align:${aligns[k]}"` : ''}>${parseInline(c)}</td>`);
+          t += '</tr>\n'; i++;
+        }
+        t += '</tbody></table>\n';
+        html += t; continue;
+      }
+
+      // lists (unordered / ordered, with nesting by indent)
+      if (/^\s*([-*+]|\d+\.)\s+/.test(line)) {
+        const res = parseList(lines, i);
+        html += res.html; i = res.next; continue;
+      }
+
+      // paragraph (group until blank / block start)
+      const buf = [];
+      while (i < lines.length && !isBlank(lines[i]) &&
+             !/^(\s*)(`{3,}|~{3,})/.test(lines[i]) &&
+             !/^#{1,6}\s/.test(lines[i]) &&
+             !/^\s*>/.test(lines[i]) &&
+             !/^\s*([-*+]|\d+\.)\s+/.test(lines[i]) &&
+             !/^\s*([-*_])(\s*\1){2,}\s*$/.test(lines[i])) {
+        buf.push(lines[i]); i++;
+      }
+      html += `<p>${parseInline(buf.join('\n'))}</p>\n`;
+    }
+    return html;
+  }
+
+  function splitRow(row) {
+    return row.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map(c => c.trim());
+  }
+
+  function parseList(lines, start) {
+    const baseIndent = lines[start].match(/^(\s*)/)[1].length;
+    const ordered = /^\s*\d+\./.test(lines[start]);
+    let html = ordered ? '<ol>\n' : '<ul>\n';
+    let i = start;
+    while (i < lines.length) {
+      const line = lines[i];
+      if (/^\s*$/.test(line)) { i++; continue; }
+      const m = line.match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
+      if (!m) break;
+      const indent = m[1].length;
+      if (indent < baseIndent) break;
+      if (indent > baseIndent) { // nested
+        const res = parseList(lines, i);
+        html = html.replace(/<\/li>\n$/, res.html + '</li>\n');
+        i = res.next; continue;
+      }
+      let content = m[3];
+      // task list
+      const task = content.match(/^\[([ xX])\]\s+(.*)$/);
+      if (task) {
+        const checked = task[1].toLowerCase() === 'x';
+        html += `<li class="task"><input type="checkbox" disabled${checked ? ' checked' : ''}> ${parseInline(task[2])}</li>\n`;
+      } else {
+        html += `<li>${parseInline(content)}</li>\n`;
+      }
+      i++;
+    }
+    html += ordered ? '</ol>\n' : '</ul>\n';
+    return { html, next: i };
+  }
+
+  /* ============================================================
+   *  Editor backdrop highlighting (regex hint)
+   * ==========================================================*/
+  function highlightEditor(text) {
+    const lines = text.split('\n');
+    let inFence = false;
+    const out = lines.map(line => {
+      const fence = /^(\s*)(`{3,}|~{3,})/.test(line);
+      if (fence) { inFence = !inFence; return `<span class="tok-fence">${escapeHtml(line)}</span>`; }
+      if (inFence) return `<span class="tok-code">${escapeHtml(line)}</span>`;
+      if (/^#{1,6}\s/.test(line)) return `<span class="tok-head">${escapeHtml(line)}</span>`;
+      if (/^\s*>/.test(line)) return `<span class="tok-quote">${escapeHtml(line)}</span>`;
+      if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) return `<span class="tok-hr">${escapeHtml(line)}</span>`;
+      return inlineHighlight(line);
+    });
+    return out.join('\n');
+  }
+
+  function inlineHighlight(line) {
+    // list marker prefix
+    let prefix = '';
+    const lm = line.match(/^(\s*)([-*+]|\d+\.)(\s+)/);
+    if (lm) {
+      prefix = escapeHtml(lm[1]) + `<span class="tok-list">${escapeHtml(lm[2])}</span>` + escapeHtml(lm[3]);
+      line = line.slice(lm[0].length);
+    }
+    // protect inline code
+    const codes = [];
+    line = line.replace(/`[^`]+`/g, m => { codes.push(m); return '\u0000' + (codes.length - 1) + '\u0000'; });
+    let s = escapeHtml(line);
+    s = s.replace(/(\*\*[^*]+\*\*|__[^_]+__)/g, '<span class="tok-bold">$1</span>');
+    s = s.replace(/(\*[^*\s][^*]*\*|(?<![\w])_[^_]+_(?![\w]))/g, '<span class="tok-italic">$1</span>');
+    s = s.replace(/(!?\[[^\]]*\]\([^)]+\))/g, '<span class="tok-link">$1</span>');
+    s = s.replace(/\u0000(\d+)\u0000/g, (_, i) => `<span class="tok-code">${escapeHtml(codes[+i])}</span>`);
+    return prefix + s;
+  }
+
+  /* ============================================================
+   *  Render pipeline
+   * ==========================================================*/
+  let renderTimer = null;
+  function scheduleRender() {
+    // backdrop updates immediately for smooth caret; preview debounced
+    const text = editor.value;
+    backdrop.innerHTML = highlightEditor(text) + '\n';
+    updateStatus(text);
+    const doc = getActiveDoc();
+    if (doc) {
+      doc.content = text;
+      const dirty = text !== doc.savedContent;
+      if (dirty !== doc.dirty) { doc.dirty = dirty; renderTabBar(); }
+    }
+    if (renderTimer) clearTimeout(renderTimer);
+    renderTimer = setTimeout(() => { preview.innerHTML = parseMarkdown(text); }, 120);
+  }
+
+  function updateStatus(text) {
+    const doc = getActiveDoc();
+    if (!doc) { status.textContent = ''; return; }
+    const words = (text.trim().match(/\S+/g) || []).length;
+    status.textContent = `${doc.name} · ${text.length}자 · ${words}단어`;
+  }
+
+  function syncScroll() {
+    backEl.scrollTop = editor.scrollTop;
+    backEl.scrollLeft = editor.scrollLeft;
+  }
+
+  // preview scroll follows editor proportionally
+  let syncingFromEditor = false;
+  editor.addEventListener('scroll', () => {
+    syncScroll();
+    if (syncingFromEditor) return;
+    const ratio = editor.scrollTop / (editor.scrollHeight - editor.clientHeight || 1);
+    preview.scrollTop = ratio * (preview.scrollHeight - preview.clientHeight);
+  });
+
+  editor.addEventListener('input', scheduleRender);
+
+  /* ============================================================
+   *  Editing helpers
+   * ==========================================================*/
+  function wrapSelection(before, after, placeholder) {
+    after = after == null ? before : after;
+    const s = editor.selectionStart, e = editor.selectionEnd;
+    const sel = editor.value.slice(s, e) || placeholder || '';
+    const text = before + sel + after;
+    editor.setRangeText(text, s, e, 'end');
+    if (!editor.value.slice(s, e)) {
+      // nothing selected: place caret between markers
+      editor.selectionStart = editor.selectionEnd = s + before.length + sel.length;
+    } else {
+      editor.selectionStart = s + before.length;
+      editor.selectionEnd = s + before.length + sel.length;
+    }
+    editor.focus();
+    scheduleRender();
+  }
+
+  function insertBlock(text) {
+    const s = editor.selectionStart;
+    editor.setRangeText(text, s, editor.selectionEnd, 'end');
+    editor.focus();
+    scheduleRender();
+  }
+
+  // Tab / Enter behavior
+  editor.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const s = editor.selectionStart, en = editor.selectionEnd;
+      if (s !== en && editor.value.slice(s, en).includes('\n')) {
+        // indent/outdent block
+        const startLine = editor.value.lastIndexOf('\n', s - 1) + 1;
+        const block = editor.value.slice(startLine, en);
+        let replaced;
+        if (e.shiftKey) replaced = block.replace(/^( {1,2}|\t)/gm, '');
+        else replaced = block.replace(/^/gm, '  ');
+        editor.setRangeText(replaced, startLine, en, 'end');
+        editor.selectionStart = startLine;
+      } else {
+        editor.setRangeText('  ', s, en, 'end');
+      }
+      scheduleRender();
+      return;
+    }
+    if (e.key === 'Enter') {
+      // continue list
+      const s = editor.selectionStart;
+      const lineStart = editor.value.lastIndexOf('\n', s - 1) + 1;
+      const cur = editor.value.slice(lineStart, s);
+      const m = cur.match(/^(\s*)([-*+]|\d+\.)\s+(\[[ xX]\]\s+)?/);
+      if (m && s === editor.selectionEnd) {
+        const rest = cur.slice(m[0].length);
+        if (rest.trim() === '') { // empty item -> end list
+          e.preventDefault();
+          editor.setRangeText('', lineStart, s, 'end');
+          scheduleRender();
+          return;
+        }
+        e.preventDefault();
+        let marker = m[2];
+        if (/\d+\./.test(marker)) marker = (parseInt(marker) + 1) + '.';
+        const task = m[3] ? '[ ] ' : '';
+        editor.setRangeText('\n' + m[1] + marker + ' ' + task, s, s, 'end');
+        scheduleRender();
+      }
+    }
+    // shortcuts
+    if (e.ctrlKey || e.metaKey) {
+      const k = e.key.toLowerCase();
+      if (k === 'b') { e.preventDefault(); wrapSelection('**', '**', '굵게'); }
+      else if (k === 'i') { e.preventDefault(); wrapSelection('*', '*', '기울임'); }
+      else if (k === 'k') { e.preventDefault(); linkPrompt(); }
+      else if (k === 's') { e.preventDefault(); saveFile(); }
+      else if (k === 'o') { e.preventDefault(); openFile(); }
+    }
+  });
+
+  function linkPrompt() {
+    const url = prompt('링크 URL:', 'https://');
+    if (url == null) return;
+    const s = editor.selectionStart, e = editor.selectionEnd;
+    const sel = editor.value.slice(s, e) || '링크';
+    editor.setRangeText(`[${sel}](${url})`, s, e, 'end');
+    editor.focus();
+    scheduleRender();
+  }
+
+  /* ============================================================
+   *  Toolbar bindings
+   * ==========================================================*/
+  document.getElementById('btnBold').onclick   = () => wrapSelection('**', '**', '굵게');
+  document.getElementById('btnItalic').onclick = () => wrapSelection('*', '*', '기울임');
+  document.getElementById('btnLink').onclick   = linkPrompt;
+  document.getElementById('btnCode').onclick   = () => {
+    const s = editor.selectionStart, e = editor.selectionEnd;
+    const sel = editor.value.slice(s, e);
+    insertBlock('```\n' + (sel || 'code') + '\n```\n');
+  };
+
+  const toolbarDocButtons = ['btnSave', 'btnBold', 'btnItalic', 'btnLink', 'btnCode', 'btnExportHtml', 'btnExportPdf']
+    .map(id => document.getElementById(id));
+  function updateToolbarEnabled() {
+    const has = !!getActiveDoc();
+    toolbarDocButtons.forEach(b => b.disabled = !has);
+  }
+
+  /* ============================================================
+   *  Tab bar / multi-document management
+   * ==========================================================*/
+  function renderTabBar() {
+    tabBarEl.innerHTML = '';
+    docs.forEach(doc => {
+      const el = document.createElement('div');
+      el.className = 'tab' + (doc.id === activeId ? ' active' : '') + (doc.dirty ? ' dirty' : '');
+      el.title = doc.name;
+      el.innerHTML = `<span class="dot"></span><span class="tname">${escapeHtml(doc.name)}</span><button class="tclose" title="닫기">×</button>`;
+      el.addEventListener('click', () => switchTab(doc.id));
+      el.querySelector('.tclose').addEventListener('click', (e) => { e.stopPropagation(); closeTab(doc.id); });
+      tabBarEl.appendChild(el);
+    });
+  }
+
+  function updateEmptyState() {
+    workArea.classList.toggle('empty', docs.length === 0);
+  }
+
+  function switchTab(id) {
+    const active = getActiveDoc();
+    if (active) active.content = editor.value;
+    activeId = id;
+    const doc = getActiveDoc();
+    editor.value = doc ? doc.content : '';
+    renderTabBar();
+    updateToolbarEnabled();
+    scheduleRender();
+    if (doc) editor.focus();
+  }
+
+  async function findExistingDoc(handle, name) {
+    for (const d of docs) {
+      if (handle && d.handle) {
+        try { if (await handle.isSameEntry(d.handle)) return d; } catch (_) { /* ignore */ }
+      } else if (!handle && !d.handle && d.name === name) {
+        return d;
+      }
+    }
+    return null;
+  }
+
+  async function openTabForFile(text, name, handle) {
+    const existing = await findExistingDoc(handle, name);
+    if (existing) {
+      switchTab(existing.id);
+      toast(`${existing.name} 열림`);
+      return;
+    }
+    const doc = {
+      id: nextDocId++,
+      name: name || 'untitled.md',
+      content: text,
+      savedContent: text,
+      handle: handle || null,
+      dirty: false
+    };
+    docs.push(doc);
+    updateEmptyState();
+    switchTab(doc.id);
+    addRecent(doc.name, doc.handle);
+    toast(`${doc.name} 열림`);
+  }
+
+  function closeTab(id) {
+    const doc = docs.find(d => d.id === id);
+    if (!doc) return;
+    if (doc.dirty && !confirm(`"${doc.name}"에 저장하지 않은 변경사항이 있습니다. 닫을까요?`)) return;
+    const idx = docs.indexOf(doc);
+    docs.splice(idx, 1);
+    if (activeId === id) {
+      activeId = null;
+      const next = docs[idx] || docs[idx - 1];
+      if (next) {
+        switchTab(next.id);
+      } else {
+        editor.value = '';
+        status.textContent = '';
+        renderTabBar();
+        updateToolbarEnabled();
+      }
+    } else {
+      renderTabBar();
+    }
+    updateEmptyState();
+  }
+
+  /* ============================================================
+   *  Recent documents (IndexedDB — a FileSystemFileHandle can't be
+   *  JSON-serialized into localStorage, so recents live here instead)
+   * ==========================================================*/
+  const RECENTS_LIMIT = 20;
+  let dbPromise = null;
+  function openDb() {
+    if (!window.indexedDB) return Promise.resolve(null);
+    if (dbPromise) return dbPromise;
+    dbPromise = new Promise((resolve) => {
+      const req = indexedDB.open('md-editor-db', 1);
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore('recents', { keyPath: 'id', autoIncrement: true });
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    });
+    return dbPromise;
+  }
+
+  async function getRecents() {
+    const db = await openDb();
+    if (!db) return [];
+    return new Promise((resolve) => {
+      const tx = db.transaction('recents', 'readonly');
+      const req = tx.objectStore('recents').getAll();
+      req.onsuccess = () => resolve((req.result || []).sort((a, b) => b.ts - a.ts));
+      req.onerror = () => resolve([]);
+    });
+  }
+
+  async function isSameRecent(entry, name, handle) {
+    if (handle && entry.handle) {
+      try { return await handle.isSameEntry(entry.handle); } catch (_) { return false; }
+    }
+    if (!handle && !entry.handle) return entry.name === name;
+    return false;
+  }
+
+  async function addRecent(name, handle) {
+    const db = await openDb();
+    if (!db) return;
+    const all = await getRecents();
+    const dupIds = [];
+    for (const e of all) { if (await isSameRecent(e, name, handle)) dupIds.push(e.id); }
+    await new Promise((resolve) => {
+      const tx = db.transaction('recents', 'readwrite');
+      const store = tx.objectStore('recents');
+      dupIds.forEach(id => store.delete(id));
+      store.add({ ts: Date.now(), name, handle: handle || null });
+      tx.oncomplete = resolve;
+      tx.onerror = resolve;
+    });
+    const fresh = await getRecents();
+    if (fresh.length > RECENTS_LIMIT) {
+      const tx = db.transaction('recents', 'readwrite');
+      const store = tx.objectStore('recents');
+      fresh.slice(RECENTS_LIMIT).forEach(e => store.delete(e.id));
+    }
+    renderRecents();
+  }
+
+  function formatRelativeTime(ts) {
+    const min = Math.floor((Date.now() - ts) / 60000);
+    if (min < 1) return '방금 전';
+    if (min < 60) return `${min}분 전`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return `${hr}시간 전`;
+    const day = Math.floor(hr / 24);
+    if (day < 7) return `${day}일 전`;
+    const d = new Date(ts);
+    return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  async function renderRecents() {
+    const list = await getRecents();
+    recentListEl.innerHTML = '';
+    if (!list.length) {
+      recentListEl.innerHTML = '<li class="empty-hint">최근 연 문서가 없습니다</li>';
+      return;
+    }
+    list.forEach(entry => {
+      const li = document.createElement('li');
+      if (!entry.handle) li.classList.add('no-handle');
+      li.title = entry.handle ? entry.name : `${entry.name} (다시 열 수 없음)`;
+      li.innerHTML = `<span class="rname">${escapeHtml(entry.name)}</span><span class="rtime">${formatRelativeTime(entry.ts)}</span>`;
+      li.addEventListener('click', () => reopenRecent(entry));
+      recentListEl.appendChild(li);
+    });
+  }
+
+  async function reopenRecent(entry) {
+    const existing = await findExistingDoc(entry.handle, entry.name);
+    if (existing) { switchTab(existing.id); return; }
+    if (entry.handle) {
+      try {
+        let perm = await entry.handle.queryPermission({ mode: 'read' });
+        if (perm !== 'granted') perm = await entry.handle.requestPermission({ mode: 'read' });
+        if (perm !== 'granted') throw new Error('permission denied');
+        const file = await entry.handle.getFile();
+        const text = await file.text();
+        await openTabForFile(text, entry.name, entry.handle);
+        return;
+      } catch (err) { /* fall through to the failure toast below */ }
+    }
+    toast('파일을 다시 열 수 없습니다. "열기"로 다시 선택해주세요.');
+  }
+
+  document.getElementById('btnSidebarToggle').onclick = () => {
+    sidebar.classList.toggle('collapsed');
+  };
+
+  /* ============================================================
+   *  File open / save
+   * ==========================================================*/
+  async function openFile() {
+    if (window.showOpenFilePicker) {
+      let h;
+      try {
+        [h] = await window.showOpenFilePicker({
+          types: [{ description: 'Markdown', accept: { 'text/markdown': ['.md', '.markdown', '.txt'] } }]
+        });
+      } catch (err) {
+        if (err.name !== 'AbortError') fileInput.click(); // picker unavailable/failed -> fallback
+        return;
+      }
+      try {
+        const file = await h.getFile();
+        await openTabForFile(await file.text(), file.name, h);
+      } catch (err) {
+        console.error(err);
+        toast('파일을 여는 중 오류가 발생했습니다: ' + (err && err.message ? err.message : err));
+      }
+      return;
+    }
+    fileInput.click();
+  }
+  fileInput.addEventListener('change', () => {
+    const f = fileInput.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => openTabForFile(r.result, f.name, null);
+    r.readAsText(f);
+    fileInput.value = '';
+  });
+
+  async function saveFile() {
+    const doc = getActiveDoc();
+    if (!doc) return;
+    const text = editor.value;
+    doc.content = text;
+    if (window.showSaveFilePicker) {
+      if (!doc.handle) {
+        try {
+          doc.handle = await window.showSaveFilePicker({
+            suggestedName: doc.name,
+            types: [{ description: 'Markdown', accept: { 'text/markdown': ['.md'] } }]
+          });
+        } catch (err) {
+          if (err.name !== 'AbortError') downloadBlob(text, doc.name, 'text/markdown');
+          return;
+        }
+      }
+      try {
+        const w = await doc.handle.createWritable();
+        await w.write(text); await w.close();
+        doc.name = doc.handle.name;
+        doc.savedContent = text;
+        doc.dirty = false;
+        renderTabBar();
+        updateStatus(text);
+        addRecent(doc.name, doc.handle);
+        toast('저장됨');
+      } catch (err) {
+        toast('저장 중 오류가 발생했습니다.');
+      }
+      return;
+    }
+    downloadBlob(text, doc.name, 'text/markdown');
+    doc.savedContent = text;
+    doc.dirty = false;
+    renderTabBar();
+    toast('다운로드됨');
+  }
+
+  function downloadBlob(content, filename, type) {
+    const blob = new Blob([content], { type: type + ';charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  document.getElementById('btnOpen').onclick = openFile;
+  document.getElementById('btnOpenEmpty').onclick = openFile;
+  document.getElementById('btnSave').onclick = saveFile;
+
+  /* ============================================================
+   *  Export HTML / PDF
+   * ==========================================================*/
+  document.getElementById('btnExportHtml').onclick = () => {
+    const doc = getActiveDoc();
+    if (!doc) return;
+    const body = parseMarkdown(editor.value);
+    const title = doc.name.replace(/\.[^.]+$/, '');
+    const out = buildStandaloneHtml(title, body);
+    downloadBlob(out, title + '.html', 'text/html');
+    toast('HTML 내보냄');
+  };
+
+  document.getElementById('btnExportPdf').onclick = () => {
+    if (!getActiveDoc()) return;
+    preview.innerHTML = parseMarkdown(editor.value);
+    setTimeout(() => window.print(), 60);
+  };
+
+  function buildStandaloneHtml(title, body) {
+    const css = `
+      body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",sans-serif;
+        line-height:1.7;max-width:820px;margin:40px auto;padding:0 20px;color:#24292f}
+      h1,h2{border-bottom:1px solid #e1e4e8;padding-bottom:.3em}
+      code{background:#f6f8fa;padding:.2em .4em;border-radius:5px;font-family:Consolas,monospace;font-size:.9em}
+      pre{background:#f6f8fa;padding:14px 16px;border-radius:8px;overflow:auto;border:1px solid #e1e4e8}
+      pre code{background:none;padding:0}
+      blockquote{margin:0 0 16px;padding:0 1em;color:#57606a;border-left:.25em solid #e1e4e8}
+      table{border-collapse:collapse;margin-bottom:16px}
+      th,td{border:1px solid #e1e4e8;padding:6px 13px} tr:nth-child(2n){background:#f6f8fa}
+      img{max-width:100%} hr{border:0;border-top:1px solid #e1e4e8;margin:24px 0}
+      a{color:#0969da;text-decoration:none}
+      .hl-kw{color:#cf222e}.hl-str{color:#0a3069}.hl-com{color:#6e7781;font-style:italic}
+      .hl-num{color:#0550ae}.hl-fn{color:#8250df}
+      li.task{list-style:none} li.task input{margin-right:.4em}`;
+    return `<!DOCTYPE html>
+<html lang="ko"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(title)}</title><style>${css}</style></head>
+<body>
+${body}</body></html>`;
+  }
+
+  /* ============================================================
+   *  Theme / view tabs / toast
+   * ==========================================================*/
+  const btnTheme = document.getElementById('btnTheme');
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    btnTheme.textContent = t === 'dark' ? '☀️' : '🌙';
+    localStorage.setItem(THEME_KEY, t);
+  }
+  btnTheme.onclick = () => {
+    const cur = document.documentElement.getAttribute('data-theme');
+    applyTheme(cur === 'dark' ? 'light' : 'dark');
+  };
+
+  document.getElementById('tabEditor').onclick  = () => setView('editor');
+  document.getElementById('tabPreview').onclick = () => setView('preview');
+  function setView(v) {
+    main.classList.remove('show-editor', 'show-preview');
+    main.classList.add(v === 'editor' ? 'show-editor' : 'show-preview');
+  }
+  function checkMobile() {
+    if (window.innerWidth <= 760) {
+      main.classList.add('mobile');
+      if (!main.classList.contains('show-editor') && !main.classList.contains('show-preview'))
+        main.classList.add('show-editor');
+    } else {
+      main.classList.remove('mobile');
+    }
+  }
+  window.addEventListener('resize', checkMobile);
+
+  let toastTimer;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1600);
+  }
+
+  /* ============================================================
+   *  Drag & drop
+   * ==========================================================*/
+  window.addEventListener('dragover', e => e.preventDefault());
+  window.addEventListener('drop', e => {
+    e.preventDefault();
+    const f = e.dataTransfer.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => openTabForFile(r.result, f.name, null);
+    r.readAsText(f);
+  });
+
+  // warn before leaving if any open document has unsaved changes
+  window.addEventListener('beforeunload', e => {
+    if (docs.some(d => d.dirty)) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  /* ============================================================
+   *  Init — always starts blank; open a file to create the first tab
+   * ==========================================================*/
+  applyTheme(localStorage.getItem(THEME_KEY) || 'light');
+  if (window.innerWidth <= 760) sidebar.classList.add('collapsed');
+  updateEmptyState();
+  updateToolbarEnabled();
+  renderTabBar();
+  renderRecents();
+  checkMobile();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+{
+  "name": "markdown-studio-desktop",
+  "version": "1.0.0",
+  "description": "Markdown Studio — portable Windows desktop build",
+  "author": "Samsung Asset Management Co.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "electron test-harness.js",
+    "pack": "electron-packager . \"Markdown Studio\" --platform=win32 --arch=x64 --out=dist --overwrite --app-copyright=\"Samsung Asset Management Co.\" --icon=icon.ico --extra-resource=../markdown-studio.html --ignore=\"^/dist$\" --ignore=\"(test-harness|summarize)\\.js$\" --prune=true",
+    "pack:portable": "powershell -NoProfile -ExecutionPolicy Bypass -File build-portable.ps1",
+    "dist": "electron-builder --win portable",
+    "dist:installer": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.0.4",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.samsungam.markdownstudio",
+    "productName": "Markdown Studio",
+    "copyright": "Copyright © 2026 Samsung Asset Management Co.",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../markdown-studio.html",
+        "to": "markdown-studio.html"
+      }
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "icon.ico"
+    },
+    "portable": {
+      "artifactName": "MarkdownStudio-Portable-${version}.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Markdown Studio",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "MarkdownStudio-Setup-${version}.exe",
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico",
+      "installerHeaderIcon": "icon.ico",
+      "uninstallDisplayName": "Markdown Studio ${version}"
+    },
+    "fileAssociations": [
+      {
+        "ext": "md",
+        "name": "Markdown Document",
+        "description": "Markdown Document",
+        "icon": "icon.ico",
+        "role": "Viewer"
+      }
+    ],
+    "compression": "maximum"
+  }
+}

@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+
+# generated web assets (sync:web 로 정본 HTML에서 매번 재생성)
+www/index.html
+
+# Capacitor 네이티브 프로젝트 산출물
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/captures/
+android/*.iml
+android/app/release/
+android/app/debug/
+
+# APK / AAB 빌드 결과
+*.apk
+*.aab
+
+# 서명 자격증명 — 절대 커밋 금지
+keystore/
+keystore.properties
+*.jks
+*.keystore
+
+# 기타
+.DS_Store
+*.log

@@ -1,0 +1,28 @@
+{
+  "name": "markdown-studio-android",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Markdown Studio — Android app (Capacitor wrapper around the canonical markdown-studio.html)",
+  "scripts": {
+    "sync:web": "node scripts/sync-web.mjs",
+    "sync": "npm run sync:web && cap sync android",
+    "add:android": "cap add android",
+    "open:android": "cap open android",
+    "run:android": "npm run sync:web && cap run android",
+    "assets": "node scripts/make-assets.mjs && npx capacitor-assets generate --android",
+    "build:apk": "node scripts/build-apk.mjs assembleDebug",
+    "build:release": "node scripts/build-apk.mjs assembleRelease bundleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/app": "^6.0.2",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/filesystem": "^6.0.3",
+    "@capacitor/share": "^6.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^6.2.0"
+  }
+}

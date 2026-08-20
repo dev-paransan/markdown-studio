@@ -1,0 +1,31 @@
+# ---- Dependencies ----
+node_modules/
+**/node_modules/
+
+# ---- Build outputs ----
+desktop/dist/
+android-app/android/app/build/
+android-app/android/build/
+android-app/android/.gradle/
+android-app/android/capacitor-cordova-android-plugins/build/
+**/build/
+**/.gradle/
+
+# ---- Secrets / signing (NEVER commit) ----
+android-app/keystore/
+android-app/keystore.properties
+android-app/android/local.properties
+*.keystore
+*.jks
+*.p12
+.env
+.env.*
+
+# ---- Local / editor ----
+.claude/settings.local.json
+.DS_Store
+Thumbs.db
+*.log
+
+# ---- OS / misc ----
+*.tmp
