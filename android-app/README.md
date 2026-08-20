@@ -1,8 +1,9 @@
 # Markdown Studio — Android 앱 (Capacitor)
 
-정본 웹 앱 `../markdown-studio.html` 을 **한 글자도 고치지 않고** 안드로이드 네이티브 앱으로
-감싼 Capacitor 프로젝트입니다. 웹 앱을 수정하면 `npm run sync:web` 한 번으로 최신 정본이
-그대로 앱에 반영됩니다.
+안드로이드 앱 전용 영문판 정본 `../markdown-studio-en.html` 을 **한 글자도 고치지 않고**
+안드로이드 네이티브 앱으로 감싼 Capacitor 프로젝트입니다. (데스크톱 정본은 한국어
+`../markdown-studio.html`; 앱은 이를 완전 영문화한 별도 파일을 싣는다.) 앱 정본을
+수정하면 `npm run sync:web` 한 번으로 최신 내용이 그대로 앱에 반영됩니다.
 
 ## 구조
 
@@ -11,14 +12,14 @@ android-app/
   package.json            # Capacitor 의존성 + 빌드 스크립트
   capacitor.config.json   # appId, appName, webDir(www)
   scripts/
-    sync-web.mjs          # ../markdown-studio.html → www/index.html 복사(+브리지 주입)
+    sync-web.mjs          # ../markdown-studio-en.html → www/index.html 복사(+브리지 주입)
   www/
     capacitor-bridge.js   # ★ 네이티브 연동 브리지(저장/공유/뒤로가기/PDF 안내)
     index.html            # (생성물) sync:web 이 만든다 — 직접 편집 금지
   android/                # (생성물) `npx cap add android` 후 생성되는 네이티브 프로젝트
 ```
 
-- **정본은 오직 `../markdown-studio.html`.** `www/index.html` 은 빌드 산출물이라 `.gitignore` 대상입니다.
+- **앱 정본은 `../markdown-studio-en.html`(영문판).** `www/index.html` 은 빌드 산출물이라 `.gitignore` 대상입니다.
 - `capacitor-bridge.js` 는 **브라우저에서는 아무 동작도 하지 않습니다**(`Capacitor.isNativePlatform()`
   체크). 그래서 `www/index.html` 을 그냥 브라우저로 열어도 원본과 100% 동일하게 동작합니다.
 
