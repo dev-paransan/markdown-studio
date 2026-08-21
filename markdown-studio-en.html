@@ -2073,7 +2073,8 @@ async function buildStandaloneHtml(d){
   await renderMermaid();                            // 복제 전에 mermaid SVG가 준비되도록 보장
   const clone = preview.cloneNode(true);
   clone.querySelectorAll(".cb-bar").forEach(el => el.remove());
-  const img = await inlineImages(clone);            // 프론트매터 카드는 유지(제목·작성자 등 메타가 내보내기에도 나옴)
+  clone.querySelectorAll(".frontmatter").forEach(el => el.remove());   // 프론트매터 카드는 내보내기에서 제외(의도적)
+  const img = await inlineImages(clone);
   const fontOverride = fontStackFor(docViewerFont);      // 현재 미리보기에 지정된 글꼴을 내보내기에도 반영
   const html = `<!doctype html>
 <html lang="ko">
@@ -2454,7 +2455,8 @@ async function buildDocxBlob(d){
   DOCX_BODY_FONT = docxFontFor(docViewerFont);           // 현재 미리보기에 지정된 글꼴을 내보내기에도 반영
   const clone = preview.cloneNode(true);
   clone.querySelectorAll(".cb-bar").forEach(el => el.remove());
-  const img = await inlineImages(clone);                  // 프론트매터 카드는 유지(워커가 Word 표로 변환)
+  clone.querySelectorAll(".frontmatter").forEach(el => el.remove());   // 프론트매터 카드는 내보내기에서 제외(의도적)
+  const img = await inlineImages(clone);
 
   const relEntries = [], media = [];
   let relSeq = 0, imgSeq = 0;
