@@ -47,6 +47,17 @@ writeFileSync(OUT, html, "utf8");
 console.log(`[sync-web] ${SRC}`);
 console.log(`[sync-web]   → ${OUT} (브리지 스크립트 주입 완료)`);
 
+// mermaid.min.js 동봉 — ```mermaid 블록을 SVG로 렌더할 때 지연 로드되는 라이브러리.
+// 정본 HTML 옆(repo 루트)의 파일을 www/ 로 복사해 앱에서 오프라인으로 same-origin 로드되게 한다.
+const MERMAID_SRC = join(repoDir, "mermaid.min.js");
+const MERMAID_OUT = join(projectDir, "www", "mermaid.min.js");
+if (existsSync(MERMAID_SRC)) {
+  copyFileSync(MERMAID_SRC, MERMAID_OUT);
+  console.log(`[sync-web]   → ${MERMAID_OUT} (mermaid 동봉)`);
+} else {
+  console.warn(`[sync-web] 경고: ${MERMAID_SRC} 가 없습니다. mermaid 다이어그램이 앱에서 렌더되지 않습니다.`);
+}
+
 if (!existsSync(BRIDGE_SRC)) {
   console.warn(`[sync-web] 경고: ${BRIDGE_SRC} 가 없습니다. 저장이 브라우저 폴백으로 동작할 수 있습니다.`);
 }

@@ -1,13 +1,13 @@
 {
   "name": "markdown-studio-desktop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Markdown Studio — portable Windows desktop build",
   "author": "Samsung Asset Management Co.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "test": "electron test-harness.js",
-    "pack": "electron-packager . \"Markdown Studio\" --platform=win32 --arch=x64 --out=dist --overwrite --app-copyright=\"Samsung Asset Management Co.\" --icon=icon.ico --extra-resource=../markdown-studio.html --ignore=\"^/dist$\" --ignore=\"(test-harness|summarize)\\.js$\" --prune=true",
+    "pack": "electron-packager . \"Markdown Studio\" --platform=win32 --arch=x64 --out=dist --overwrite --app-copyright=\"Samsung Asset Management Co.\" --icon=icon.ico --extra-resource=../markdown-studio.html --extra-resource=../mermaid.min.js --ignore=\"^/dist$\" --ignore=\"(test-harness|summarize)\\.js$\" --prune=true",
     "pack:portable": "powershell -NoProfile -ExecutionPolicy Bypass -File build-portable.ps1",
     "dist": "electron-builder --win portable",
     "dist:installer": "electron-builder --win nsis"
@@ -32,6 +32,10 @@
       {
         "from": "../markdown-studio.html",
         "to": "markdown-studio.html"
+      },
+      {
+        "from": "../mermaid.min.js",
+        "to": "mermaid.min.js"
       }
     ],
     "win": {

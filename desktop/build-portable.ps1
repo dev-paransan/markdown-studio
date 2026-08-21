@@ -18,6 +18,7 @@ $ErrorActionPreference = "Stop"
 $here    = Split-Path -Parent $MyInvocation.MyCommand.Path
 $srcDist = Join-Path $here "node_modules\electron\dist"
 $html    = Join-Path $here "..\markdown-studio.html"
+$mermaid = Join-Path $here "..\mermaid.min.js"
 $dst     = Join-Path $here "dist\MarkdownStudio-portable"
 
 if (-not (Test-Path $srcDist)) { throw "electron dist 없음. 먼저 'npm install' 실행: $srcDist" }
@@ -35,7 +36,10 @@ $appDir = Join-Path $dst "resources\app"
 New-Item -ItemType Directory -Force -Path $appDir | Out-Null
 Copy-Item (Join-Path $here "main.js")            (Join-Path $appDir "main.js") -Force
 Copy-Item $html                                   (Join-Path $appDir "markdown-studio.html") -Force
-'{ "name": "markdown-studio", "version": "1.0.0", "main": "main.js" }' |
+if (Test-Path $mermaid) {                          # mermaid 다이어그램 렌더용(HTML 옆에 동봉 → app:// same-origin 로드)
+  Copy-Item $mermaid                              (Join-Path $appDir "mermaid.min.js") -Force
+}
+'{ "name": "markdown-studio", "version": "1.1.0", "main": "main.js" }' |
   Out-File -FilePath (Join-Path $appDir "package.json") -Encoding utf8
 
 Write-Host "[4/4] 서명 보존 exe 생성(rename)..."

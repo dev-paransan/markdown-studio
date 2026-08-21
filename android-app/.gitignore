@@ -1,8 +1,9 @@
 # dependencies
 node_modules/
 
-# generated web assets (sync:web 로 정본 HTML에서 매번 재생성)
+# generated web assets (sync:web 로 정본 HTML/라이브러리에서 매번 재생성)
 www/index.html
+www/mermaid.min.js
 
 # Capacitor 네이티브 프로젝트 산출물
 android/.gradle/
