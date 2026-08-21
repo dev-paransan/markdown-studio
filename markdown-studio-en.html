@@ -996,7 +996,9 @@ function ensureMermaid(){
     const s = document.createElement("script");
     s.src = "mermaid.min.js";                       // 데스크탑(app://)·웹·안드로이드(www) 모두 HTML 옆에 동봉
     s.onload = () => {
-      try{ window.mermaid.initialize({ startOnLoad: false, theme: "neutral", securityLevel: "strict" }); }catch{}
+      // suppressErrorRendering: 편집 중 문법 오류가 나도 mermaid가 body에 에러 다이어그램을
+      // 주입하지 않게 한다(주입된 요소는 문법을 고쳐도 안 사라져 계속 쌓였음). 오류는 우리 mmdError로 표시.
+      try{ window.mermaid.initialize({ startOnLoad: false, theme: "neutral", securityLevel: "strict", suppressErrorRendering: true }); }catch{}
       res(window.mermaid);
     };
     s.onerror = () => rej(new Error("mermaid load failed"));
@@ -1035,11 +1037,17 @@ async function renderMermaid(){
   /* mermaid.render 는 내부적으로 공유 DOM/전역을 쓰므로 동시 호출을 피해 순차 렌더한다. */
   for(const { el, src } of pending){
     if(!el.isConnected || el.classList.contains("done")) continue;
+    const rid = "mmd-" + (mmdRunId++);
     try{
-      const { svg } = await m.render("mmd-" + (mmdRunId++), src);
+      const { svg } = await m.render(rid, src);
       mmdCache.set(src, svg);
       if(el.isConnected){ el.innerHTML = reidSvg(svg); el.classList.add("done"); }
-    }catch{ mmdError(el, src, "Diagram syntax error"); }
+    }catch{
+      if(el.isConnected) mmdError(el, src, "Diagram syntax error");
+    }finally{
+      document.getElementById(rid)?.remove();          // mermaid 렌더 임시/잔여 요소 정리
+      document.getElementById("d" + rid)?.remove();
+    }
   }
 }
 
