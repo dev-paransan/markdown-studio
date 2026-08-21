@@ -1006,7 +1006,16 @@ function ensureMermaid(){
 }
 function mmdError(el, src, msg){
   el.innerHTML = `<div class="mmd-err">⚠ ${esc(msg)}</div><pre class="mmd-src"><code>${esc(src)}</code></pre>`;
-  el.classList.add("done", "err");
+  el.classList.add("done");
+}
+/* 같은 mermaid 소스가 문서에 두 번 이상 나오면 캐시된 SVG를 그대로 재사용하는데,
+   mermaid이 만든 내부 id(marker·gradient 등, url(#id)로 참조)가 DOM에서 충돌한다.
+   삽입할 때마다 모든 id와 그 참조(#id)에 고유 접미사를 붙여 인스턴스별로 유일하게 만든다. */
+function reidSvg(svg){
+  const suffix = "-i" + (mmdRunId++);
+  const map = new Map();
+  svg = svg.replace(/\bid="([^"]+)"/g, (_, id) => { const n = id + suffix; map.set(id, n); return `id="${n}"`; });
+  return svg.replace(/#([\w.:-]+)/g, (m, id) => map.has(id) ? "#" + map.get(id) : m);   // url(#id)·href="#id"만 치환(색상 #fff 등은 map에 없어 유지)
 }
 /* 미리보기의 미렌더 mermaid 블록을 SVG로 채운다. 캐시 히트는 동기 처리, 나머지만 지연 로드 후 렌더.
    내보내기/인쇄는 clone 전에 이 함수를 await 해 SVG가 준비된 상태로 복제한다. */
@@ -1016,19 +1025,20 @@ async function renderMermaid(){
   const pending = [];
   for(const el of blocks){
     const src = mmdRaw[+el.dataset.mmd] || "";
-    if(mmdCache.has(src)){ el.innerHTML = mmdCache.get(src); el.classList.add("done"); }
+    if(mmdCache.has(src)){ el.innerHTML = reidSvg(mmdCache.get(src)); el.classList.add("done"); }
     else pending.push({ el, src });
   }
   if(!pending.length) return;
   let m;
   try{ m = await ensureMermaid(); }
   catch{ pending.forEach(p => mmdError(p.el, p.src, "mermaid.min.js 를 불러오지 못했습니다")); return; }
+  /* mermaid.render 는 내부적으로 공유 DOM/전역을 쓰므로 동시 호출을 피해 순차 렌더한다. */
   for(const { el, src } of pending){
     if(!el.isConnected || el.classList.contains("done")) continue;
     try{
       const { svg } = await m.render("mmd-" + (mmdRunId++), src);
       mmdCache.set(src, svg);
-      if(el.isConnected){ el.innerHTML = svg; el.classList.add("done"); }
+      if(el.isConnected){ el.innerHTML = reidSvg(svg); el.classList.add("done"); }
     }catch{ mmdError(el, src, "다이어그램 문법 오류"); }
   }
 }
@@ -1350,6 +1360,12 @@ function scheduleRender(){                          // 입력용: 크롬은 즉�
   paintChrome(d);
   clearTimeout(renderTimer);
   renderTimer = setTimeout(() => renderPreview(cur()), 90);
+}
+/* 대기 중인 디바운스 렌더를 즉시 확정한다. 내보내기/인쇄가 live #preview를 복제하기 전에 호출해,
+   타이핑 직후 90ms 안에 내보내도 최신 내용이 반영되도록 한다(디바운스 도입으로 생긴 stale 방지). */
+function flushRender(){
+  clearTimeout(renderTimer);
+  renderPreview(cur());
 }
 function caret(){
   const p = editor.selectionStart, before = editor.value.slice(0, p).split("\n");
@@ -1717,7 +1733,8 @@ preview.addEventListener("change", e => {
 /* 코드 블록 복사 */
 preview.addEventListener("click", async e => {
   const b = e.target.closest(".cp"); if(!b) return;
-  const code = b.parentElement.querySelector("code");
+  const code = b.closest(".cb").querySelector("code");   // 버튼은 .cb-bar 안, <code>는 형제 <pre> 안
+  if(!code) return;
   const label = b.querySelector(".cp-t");
   try{
     await navigator.clipboard.writeText(code.textContent);
@@ -1878,29 +1895,32 @@ const loadImg = src => new Promise((res, rej) => {
 });
 
 async function encodeImageFile(file){
-  const raw = await blobToDataUrl(file);
   const isSvg = /svg/i.test(file.type) || /\.svg$/i.test(file.name || "");
-  let img = null;
-  try{ img = await loadImg(raw); }catch{ /* 디코드 실패 시 원본 그대로 */ }
-  let w = img ? img.naturalWidth : 0, h = img ? img.naturalHeight : 0;
-  const oversized = Math.max(w, h) > MAX_IMG_DIM || file.size > IMG_BYTES_LIMIT;
-  if(!isSvg && !oversized) return { url: raw, scaled: false };   // 원본 유지(예: GIF 애니메이션 보존)
-  if(!w || !h){ w = 800; h = 600; }                              // 크기 미상(일부 SVG) 기본값
-  const scale = Math.min(1, MAX_IMG_DIM / Math.max(w, h));
-  const cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
-  const cv = document.createElement("canvas");
-  cv.width = cw; cv.height = ch;
-  const ctx = cv.getContext("2d");
-  if(img) ctx.drawImage(img, 0, 0, cw, ch);
-  const type = file.type === "image/jpeg" ? "image/jpeg" : "image/png";
-  let url;
-  try{ url = cv.toDataURL(type, 0.9); }catch{ url = raw; }        // 실패(taint 등) 시 원본으로 폴백
-  return { url, scaled: true };
+  const objUrl = URL.createObjectURL(file);                       // 디코드는 blob URL로 — 원본 full base64를 만들지 않는다(대용량 메모리 절약)
+  try{
+    let img = null;
+    try{ img = await loadImg(objUrl); }catch{ /* 디코드 실패 */ }
+    if(!img) return { url: await blobToDataUrl(file), scaled: false };   // 못 읽으면 원본 그대로 내장
+    const w = img.naturalWidth || 0, h = img.naturalHeight || 0;
+    const oversized = Math.max(w, h) > MAX_IMG_DIM || file.size > IMG_BYTES_LIMIT;
+    if(!isSvg && !oversized) return { url: await blobToDataUrl(file), scaled: false };   // 원본 유지(예: GIF 애니메이션 보존)
+    const bw = w || 800, bh = h || 600;                           // 크기 미상(일부 SVG) 기본값
+    const scale = Math.min(1, MAX_IMG_DIM / Math.max(bw, bh));
+    const cw = Math.max(1, Math.round(bw * scale)), ch = Math.max(1, Math.round(bh * scale));
+    const cv = document.createElement("canvas");
+    cv.width = cw; cv.height = ch;
+    cv.getContext("2d").drawImage(img, 0, 0, cw, ch);
+    const type = file.type === "image/jpeg" ? "image/jpeg" : "image/png";
+    let url;
+    try{ url = cv.toDataURL(type, 0.9); }catch{ url = await blobToDataUrl(file); }        // 실패(taint 등) 시 원본으로 폴백
+    return { url, scaled: scale < 1 };                            // scaled = 실제로 축소된 경우만(SVG 래스터화는 축소 아님)
+  } finally { URL.revokeObjectURL(objUrl); }
 }
 
-/* 선두 프론트매터 블록의 끝 인덱스(없으면 0). 그 앞에는 아무것도 넣지 못하도록 삽입 위치를 보정한다. */
+/* 선두 프론트매터 블록의 끝 인덱스(없으면 0). 그 앞에는 아무것도 넣지 못하도록 삽입 위치를 보정한다.
+   render()의 프론트매터 판정(^---\s*$, 끝 공백 허용)과 일치시켜야 트레일링 공백 펜스에서도 카드가 안 깨진다. */
 function frontmatterEnd(text){
-  const m = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/.exec(text);
+  const m = /^---[^\S\r\n]*\r?\n[\s\S]*?\r?\n---[^\S\r\n]*(?:\r?\n|$)/.exec(text);
   return m ? m[0].length : 0;
 }
 function insertAtCursor(text){
@@ -1921,15 +1941,16 @@ async function insertImageFiles(fileList){
   if(!d || d.readonly){ toast("이미지는 편집 가능한 문서에만 넣을 수 있습니다."); return; }
   const imgs = [...fileList].filter(isImageFile);
   if(!imgs.length) return;
-  if(imgs.length > 1 || imgs[0].size > IMG_BYTES_LIMIT) toast("이미지 처리 중…");
+  if(imgs.length > 1 || imgs.some(f => f.size > IMG_BYTES_LIMIT)) toast("이미지 처리 중…");
+  /* 파일별 인코딩은 서로 독립이므로 병렬 처리하되, 순서는 원래 순서대로 조립한다 */
+  const results = await Promise.all(imgs.map(f =>
+    encodeImageFile(f).then(r => ({ f, r })).catch(() => null)));
   let scaled = 0, md = "", failed = 0;
-  for(const f of imgs){
-    try{
-      const r = await encodeImageFile(f);
-      if(r.scaled) scaled++;
-      const alt = (f.name || "image").replace(/\.[^.]+$/, "");
-      md += `![${alt}](${r.url})\n`;
-    }catch{ failed++; }
+  for(const item of results){
+    if(!item){ failed++; continue; }
+    if(item.r.scaled) scaled++;
+    const alt = (item.f.name || "image").replace(/\.[^.]+$/, "");
+    md += `![${alt}](${item.r.url})\n`;
   }
   if(md) insertAtCursor(md);
   let msg = `이미지 ${imgs.length - failed}개 삽입됨`;
@@ -2054,6 +2075,7 @@ body{font-family:var(--ui);color:var(--text);background:var(--paper);font-size:1
 /* 자체 완결형(스타일·이미지 내장) HTML 문서를 만든다. {html, img} 반환.
    미리보기 렌더 결과를 복제하고, 코드블록 툴바와 프론트매터 카드를 걷어낸 뒤 이미지를 내장한다. */
 async function buildStandaloneHtml(d){
+  flushRender();                                    // 대기 중인 디바운스 렌더를 확정(타이핑 직후 내보내기 stale 방지)
   await renderMermaid();                            // 복제 전에 mermaid SVG가 준비되도록 보장
   const clone = preview.cloneNode(true);
   clone.querySelectorAll(".cb-bar").forEach(el => el.remove());
@@ -2129,6 +2151,10 @@ function pmWriteFrame(html){
 }
 async function exportPdf(){                        // 이름 유지: print 버튼·⌘P·저장메뉴(PDF)에서 호출
   const d = cur(); if(!d) return;
+  if(NATIVE){                                      // Capacitor 앱(WebView)은 print()가 동작하지 않는다 → 막다른 모달 대신 안내
+    toast("앱에서는 인쇄를 지원하지 않습니다. HTML·Word로 내보내 공유하세요.");
+    return;
+  }
   if(preview.querySelector("img")) toast("이미지 불러오는 중…");
   const { html } = await buildStandaloneHtml(d);
   pmWriteFrame(html);
@@ -2140,6 +2166,7 @@ function closePrintPreview(){
 }
 function doPrint(){
   const fw = pmFrame.contentWindow;
+  fw.onafterprint = closePrintPreview;             // 인쇄/취소 후 모달을 닫고 iframe(내장 base64)을 즉시 비운다
   try{ fw.focus(); fw.print(); }
   catch{ toast("인쇄를 열지 못했습니다."); }
 }
@@ -2428,6 +2455,8 @@ function docxRelsXml(entries){
 
 /* 미리보기 렌더 결과를 .docx 패키지(Blob)로 조립한다. {blob, img} 반환 */
 async function buildDocxBlob(d){
+  flushRender();                                          // 대기 중인 디바운스 렌더를 확정(타이핑 직후 내보내기 stale 방지)
+  await renderMermaid();                                  // mmdRaw[]를 최신 렌더 기준으로 채워 .mmd 소스가 정확하도록
   DOCX_BODY_FONT = docxFontFor(docViewerFont);           // 현재 미리보기에 지정된 글꼴을 내보내기에도 반영
   const clone = preview.cloneNode(true);
   clone.querySelectorAll(".cb-bar").forEach(el => el.remove());
@@ -2597,7 +2626,7 @@ editor.addEventListener("click", caret);
 editor.addEventListener("paste", e => {
   const d = cur(); if(!d || d.readonly) return;
   const files = [...(e.clipboardData && e.clipboardData.items || [])]
-    .filter(it => it.kind === "file" && /^image\//i.test(it.type))
+    .filter(it => it.kind === "file" && isImageFile({ type: it.type }))   // 이미지 판정은 isImageFile로 일원화
     .map(it => it.getAsFile()).filter(Boolean);
   if(!files.length) return;                            // 이미지가 아니면 기본 텍스트 붙여넣기
   e.preventDefault();
@@ -2798,23 +2827,24 @@ async function handleDrop(dt){
   }
 
   const imageFiles = [];
-  const d = cur(), canEmbed = d && !d.readonly;        // 편집 중 문서가 있으면 이미지는 그 문서에 삽입
 
+  /* .md는 새 탭으로 열고, 이미지는 모아 둔다. 삽입 대상(편집 가능 문서) 판정은 아래에서
+     함께 드롭한 .md를 연 뒤에 하므로, 여기서 미리 canEmbed로 거르지 않는다(이미지+ .md 동시 드롭 대응). */
   for(const p of handlePromises){
     let h; try{ h = await p; }catch{ continue; }
     if(!h || h.kind !== "file") continue;
     if(MD_RE.test(h.name)){ last = await addByHandle(h, false); continue; }   // 드롭은 편집 모드로 연다
-    if(canEmbed && IMG_RE.test(h.name)){ try{ imageFiles.push(await h.getFile()); }catch{} continue; }
+    if(IMG_RE.test(h.name)){ try{ imageFiles.push(await h.getFile()); }catch{} continue; }
     skipped++;
   }
   for(const f of files){
     if(MD_RE.test(f.name)){ last = await addByFile(f, false); continue; }
-    if(canEmbed && isImageFile(f)){ imageFiles.push(f); continue; }
+    if(isImageFile(f)){ imageFiles.push(f); continue; }
     skipped++;
   }
 
-  if(last) select(last);
-  if(imageFiles.length) await insertImageFiles(imageFiles);
+  if(last) select(last);                                // 함께 드롭한 .md를 활성화한 뒤
+  if(imageFiles.length) await insertImageFiles(imageFiles);   // 그 편집 문서에 이미지를 넣는다(대상 없으면 insertImageFiles가 안내)
   if(skipped) toast(`${skipped}개 파일은 지원하지 않는 형식이라 건너뛰었습니다.`);
 }
 

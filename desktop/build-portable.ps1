@@ -39,7 +39,7 @@ Copy-Item $html                                   (Join-Path $appDir "markdown-s
 if (Test-Path $mermaid) {                          # mermaid 다이어그램 렌더용(HTML 옆에 동봉 → app:// same-origin 로드)
   Copy-Item $mermaid                              (Join-Path $appDir "mermaid.min.js") -Force
 }
-'{ "name": "markdown-studio", "version": "1.1.0", "main": "main.js" }' |
+'{ "name": "markdown-studio", "version": "1.1.1", "main": "main.js" }' |
   Out-File -FilePath (Join-Path $appDir "package.json") -Encoding utf8
 
 Write-Host "[4/4] 서명 보존 exe 생성(rename)..."
