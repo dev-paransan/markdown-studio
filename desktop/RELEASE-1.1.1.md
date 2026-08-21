@@ -57,4 +57,4 @@
 > 근본 해결책은 신뢰된 인증서로 **코드 서명**하는 것입니다. 서명하면 SmartScreen·SAC 모두 통과하며 설치 프로그램을 그대로 쓸 수 있습니다.
 
 ---
-Copyright © 2026 Samsung Asset Management Co.
+Copyright © 2026 PARANSAN
