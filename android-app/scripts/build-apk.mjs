@@ -1,8 +1,9 @@
 // build-apk.mjs — 커맨드라인에서 디버그 APK 를 빌드한다.
 //
 // 이 PC 에는 java 가 PATH 에도 JAVA_HOME 에도 없고(기본 JDK 는 Android Studio 번들
-// JBR 25), 프로젝트의 Gradle 8.2.1 은 Java 20 까지만 지원한다. 그래서 여기서
-// JDK 17 을 자동으로 찾아 JAVA_HOME 으로 넣어 gradlew 를 실행한다.
+// JBR 25), 프로젝트의 Gradle 8.13 은 Java 23 까지만 지원한다(AGP 8.11 이 요구하는
+// JDK 도 17 이다). 그래서 여기서 JDK 17 을 자동으로 찾아 JAVA_HOME 으로 넣어
+// gradlew 를 실행한다.
 //   1) 먼저 정본 HTML 을 www/ 로 다시 동기화(sync-web)
 //   2) JDK 17 을 찾아 JAVA_HOME 설정
 //   3) android/gradlew.bat assembleDebug 실행

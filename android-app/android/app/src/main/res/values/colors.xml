@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 시스템바(상태표시줄·내비게이션바) 뒤에 깔리는 색.
+         웹 앱의 모바일 상단바(#mbar, CSS 변수 sb-bg = #f1f1ec)와 같은 색이라,
+         edge-to-edge 에서 인셋만큼 준 패딩이 상단바의 연장처럼 보인다. -->
+    <color name="mds_system_bar_bg">#F1F1EC</color>
+</resources>

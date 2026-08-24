@@ -2,12 +2,23 @@ package com.markdownstudio.app;
 
 import android.content.Intent;
 import android.database.Cursor;
+import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.OpenableColumns;
+import android.view.View;
 import android.webkit.ValueCallback;
+
+import androidx.core.content.ContextCompat;
+import androidx.core.graphics.Insets;
+import androidx.core.view.OnApplyWindowInsetsListener;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -28,7 +39,63 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        applyEdgeToEdgeInsets();
         handleFileIntent(getIntent());
+    }
+
+    /**
+     * targetSdk 36(Android 16)부터는 edge-to-edge 가 강제된다. windowOptOutEdgeToEdgeEnforcement
+     * 는 Android 16 에서 무시되므로 앱이 직접 인셋을 처리해야 한다 — 그대로 두면 WebView 가
+     * 상태표시줄·내비게이션바 밑까지 깔려 웹 상단바(#mbar)와 하단 상태바(#status)가 가려진다.
+     *
+     * 콘텐츠 루트(android.R.id.content)에 시스템바·디스플레이 컷아웃·IME 인셋을 패딩으로 주어
+     * 예전(fitsSystemWindows) 과 같은 화면을 유지한다. 패딩 영역은 루트 배경색
+     * (@color/mds_system_bar_bg = 웹 상단바와 같은 #F1F1EC)으로 칠해진다.
+     *
+     * IME 를 인셋에 포함하는 이유: decorFitsSystemWindows=false 에서는 adjustResize 가 창을
+     * 줄여주지 않으므로(API 30+) 키보드가 편집기를 덮는다. ime() 인셋을 패딩에 더해 예전
+     * adjustResize 와 같은 동작을 되살린다.
+     *
+     * API 30 미만은 손대지 않는다 — WindowInsetsCompat.Type.ime() 가 API 30+ 에서만 신뢰할 수
+     * 있고, edge-to-edge 강제도 Android 15/16 에서만 일어나기 때문이다.
+     */
+    @SuppressWarnings("deprecation") // setStatusBarColor/setNavigationBarColor: API 35+ 에서 no-op 으로 폐기(그래서 35 미만에서만 호출)
+    private void applyEdgeToEdgeInsets() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return;   // API 30 미만: 기존 동작 유지
+
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+
+        final View root = findViewById(android.R.id.content);
+        if (root == null) return;
+        root.setBackgroundColor(ContextCompat.getColor(this, R.color.mds_system_bar_bg));
+
+        ViewCompat.setOnApplyWindowInsetsListener(root, new OnApplyWindowInsetsListener() {
+            @Override
+            public WindowInsetsCompat onApplyWindowInsets(View v, WindowInsetsCompat insets) {
+                Insets pad = insets.getInsets(
+                    WindowInsetsCompat.Type.systemBars()
+                        | WindowInsetsCompat.Type.displayCutout()
+                        | WindowInsetsCompat.Type.ime()
+                );
+                v.setPadding(pad.left, pad.top, pad.right, pad.bottom);
+                return WindowInsetsCompat.CONSUMED;
+            }
+        });
+        ViewCompat.requestApplyInsets(root);
+
+        // 종이(라이트) 테마이므로 시스템바 아이콘은 어둡게.
+        WindowInsetsControllerCompat bars =
+            WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        bars.setAppearanceLightStatusBars(true);
+        bars.setAppearanceLightNavigationBars(true);
+
+        // API 30~34: 시스템이 그리는 바 배경·대비 스크림을 걷어내 위 패딩 색이 그대로 보이게 한다.
+        // (35 = VANILLA_ICE_CREAM. 상수 대신 숫자를 쓰는 이유는 낮은 compileSdk 로 내려도 컴파일되게.)
+        if (Build.VERSION.SDK_INT < 35) {
+            getWindow().setStatusBarColor(Color.TRANSPARENT);
+            getWindow().setNavigationBarColor(Color.TRANSPARENT);
+            getWindow().setNavigationBarContrastEnforced(false);
+        }
     }
 
     @Override
