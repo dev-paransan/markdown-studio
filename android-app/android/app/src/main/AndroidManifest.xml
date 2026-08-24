@@ -6,13 +6,21 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/AppTheme">
+        android:theme="@style/AppTheme"
+        android:enableOnBackInvokedCallback="false">
+        <!-- targetSdk 36 부터는 예측형 뒤로가기(predictive back)가 기본 ON 이라
+             Activity.onBackPressed() 가 호출되지 않는다. Capacitor 6 의 App 플러그인
+             backButton 리스너(www/capacitor-bridge.js)가 바로 그 경로를 쓰므로, 앱 안에서의
+             '뒤로 = 오버레이 닫기/이전 화면' 동작이 통째로 사라진다. Android 16 에서도
+             아직 유효한 opt-out 플래그로 기존 동작을 유지한다. (Capacitor 를 7/8 로 올려
+             OnBackInvokedCallback 으로 이전하면 이 플래그를 지울 수 있다.) -->
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -11,7 +11,7 @@
 
 | 항목 | 값 / 위치 | 상태 |
 |---|---|---|
-| 서명된 AAB | `android-app/android/app/build/outputs/bundle/release/app-release.aab` (versionCode 1 / versionName 1.0, targetSdk 35, 서명 `O=PARANSAN`) | ✅ |
+| 서명된 AAB | `android-app/android/app/build/outputs/bundle/release/app-release.aab` (현재 빌드: versionCode 4 / versionName 1.1.2, targetSdk 36, 서명 `O=PARANSAN`) | ✅ |
 | 개인정보처리방침 URL | https://markdown-studio-privacy.vercel.app | ✅ |
 | 앱 이름 / 짧은 설명 / 전체 설명 | `store/listing-en.md` | ✅ |
 | 피처 그래픽 1024×500 | `store/feature-graphic.png` | ✅ |
@@ -123,7 +123,8 @@ Play Console → **모든 앱 → 앱 만들기(Create app)**
 
 ### 5-3. 검토 후 출시
 - "검토(Review release)" → 경고 확인 → "출시 시작(Start rollout)".
-- targetSdk 35라 SDK 관련 차단 경고는 없어야 합니다(이미 반영).
+- targetSdk 36(Android 16)이라 SDK 관련 차단 경고는 없어야 합니다(이미 반영).
+  Play 는 2026-08-31 부터 targetSdk 36 미만 앱의 **업데이트 자체를 막습니다**.
 
 ---
 
