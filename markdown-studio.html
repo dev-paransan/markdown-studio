@@ -1,4 +1,8 @@
 <meta charset="utf-8">
+<!-- 모바일 레이아웃 뷰포트. 없으면 안드로이드/모바일 브라우저가 980px 가상 폭으로
+     레이아웃해 화면보다 넓어지고( ≤820px 모바일 UI 도 적용되지 않는다 ) 페이지 전체가
+     좌우로 밀린다. -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 콘텐츠 보안 정책(심층 방어). 살균기가 1차 방어선이고, CSP는 eval·<object>·<base>·폼 전송·
      프레임 등 나머지 공격면을 차단한다. 앱은 인라인 <script>/<style>을 쓰므로 그 둘만 'unsafe-inline'
      을 허용하되 'unsafe-eval'은 허용하지 않는다(eval 미사용). 이미지·내보내기 fetch는 임의 원격 주소를
@@ -193,7 +197,9 @@
 
   /* preview */
   #pvPane{flex:1;min-width:200px;background:#fff;overflow:auto;border-left:0}
-  #preview{padding:34px 40px 80px;max-width:820px;line-height:1.8;font-family:var(--ui)}
+  /* overflow-wrap: 공백 없는 긴 URL·경로·단어가 패널을 넘겨 가로 스크롤을 만들지 않도록 줄바꿈.
+     (코드 블록은 white-space:pre 라 영향을 받지 않고 .cb pre 안에서 따로 가로 스크롤된다) */
+  #preview{padding:34px 40px 80px;max-width:820px;line-height:1.8;font-family:var(--ui);overflow-wrap:break-word}
 
   /* empty */
   #empty{
@@ -400,6 +406,10 @@
   #preview hr{border:0;border-top:1px solid var(--rule);margin:2em 0}
   #preview table{border-collapse:collapse;width:100%;margin:0 0 1.2em;font-size:13px}
   #preview th,#preview td{border:1px solid var(--rule);padding:8px 11px;text-align:left}
+  /* 표 안의 링크·인라인 코드만 anywhere: break-word 와 달리 최소폭(min-content)까지 줄여 주므로
+     긴 URL 이 든 셀이 width:100% 표를 패널 밖으로 밀어내지 않는다. 일반 낱말은 break-word 로만
+     처리해( 셀 전체에 anywhere 를 주지 않아 ) 짧은 머리글이 억지로 쪼개지지 않는다 */
+  #preview td a,#preview td code,#preview th a,#preview th code{overflow-wrap:anywhere}
   #preview th{background:#ecece6;font-weight:600}
   #preview tr:nth-child(2n) td{background:#fafaf7}
   #preview img{max-width:100%;border-radius:6px}
@@ -2035,7 +2045,7 @@ const EXPORT_CSS = `
 *{box-sizing:border-box}
 html,body{margin:0}
 body{font-family:var(--ui);color:var(--text);background:var(--paper);font-size:15px;line-height:1.8;padding:48px 24px 72px}
-.md-body{max-width:820px;margin:0 auto}
+.md-body{max-width:820px;margin:0 auto;overflow-wrap:break-word}
 .md-body>*:first-child{margin-top:0}
 .md-body h1,.md-body h2,.md-body h3,.md-body h4{line-height:1.35;margin:1.6em 0 .6em;font-weight:600}
 .md-body h1{font-size:28px;margin-top:0;padding-bottom:.35em;border-bottom:1px solid var(--rule)}
@@ -2058,6 +2068,7 @@ body{font-family:var(--ui);color:var(--text);background:var(--paper);font-size:1
 .md-body hr{border:0;border-top:1px solid var(--rule);margin:2em 0}
 .md-body table{border-collapse:collapse;width:100%;margin:0 0 1.2em;font-size:14px}
 .md-body th,.md-body td{border:1px solid var(--rule);padding:8px 11px;text-align:left}
+.md-body td a,.md-body td code,.md-body th a,.md-body th code{overflow-wrap:anywhere}
 .md-body th{background:#ecece6;font-weight:600}
 .md-body tr:nth-child(2n) td{background:#fafaf7}
 .md-body img{max-width:100%;border-radius:6px}
