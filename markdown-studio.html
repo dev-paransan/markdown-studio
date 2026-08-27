@@ -1,8 +1,11 @@
 <meta charset="utf-8">
 <!-- 모바일 레이아웃 뷰포트. 없으면 안드로이드/모바일 브라우저가 980px 가상 폭으로
      레이아웃해 화면보다 넓어지고( ≤820px 모바일 UI 도 적용되지 않는다 ) 페이지 전체가
-     좌우로 밀린다. -->
-<meta name="viewport" content="width=device-width, initial-scale=1">
+     좌우로 밀린다.
+     viewport-fit=cover: targetSdk 35(안드로이드 15)는 edge-to-edge 가 강제라 WebView 가
+     상태바·내비게이션바 뒤까지 그린다. cover 가 없으면 env(safe-area-inset-*) 이 항상 0 이라
+     상단바가 상태바 밑에 깔린다. cover 로 실제 인셋을 받아 아래 CSS 에서 패딩으로 피한다. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <!-- 콘텐츠 보안 정책(심층 방어). 살균기가 1차 방어선이고, CSP는 eval·<object>·<base>·폼 전송·
      프레임 등 나머지 공격면을 차단한다. 앱은 인라인 <script>/<style>을 쓰므로 그 둘만 'unsafe-inline'
      을 허용하되 'unsafe-eval'은 허용하지 않는다(eval 미사용). 이미지·내보내기 fetch는 임의 원격 주소를
@@ -253,7 +256,7 @@
   .rec .dot.linked{background:var(--accent);box-shadow:0 0 0 2px rgba(46,125,110,.22)}
 
   #toast{
-    position:fixed;left:50%;bottom:56px;transform:translate(-50%,14px);
+    position:fixed;left:50%;bottom:calc(56px + env(safe-area-inset-bottom));transform:translate(-50%,14px);
     background:var(--ink);color:#eef2f6;font-size:12.5px;padding:9px 16px;border-radius:8px;
     box-shadow:0 8px 26px rgba(22,32,43,.28);opacity:0;pointer-events:none;transition:.18s ease;
     max-width:70vw;
@@ -506,7 +509,9 @@
     #empty .cta{padding:8px 9px;font-size:12px}
 
     /* 템플릿 모달: 화면 폭에 맞추고 텍스트영역을 조금 낮게 */
-    #tmplModal{padding:12px}
+    #tmplModal{
+      padding:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom));
+    }
     #tmplModal .tm-panel{padding:14px}
     #tmplText{min-height:220px;font-size:12.5px}
 
