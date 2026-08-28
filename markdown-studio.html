@@ -457,6 +457,13 @@
       padding:8px 12px;padding-top:calc(8px + env(safe-area-inset-top));
       background:var(--sb-bg);border-bottom:1px solid var(--sb-line);
     }
+    /* 상태바(시계·배터리) 영역만 브랜드 잉크색 밴드로 — 앱바(--sb-bg)와 색이 이어지지 않게
+       구분한다. edge-to-edge 가 아니거나 인셋이 없는 기기·브라우저에서는 높이가 0 이라
+       아무것도 보이지 않는다. 밴드가 어두우므로 상태바 아이콘은 흰색(테마 기본값)이 맞다. */
+    #mbar::before{
+      content:"";position:fixed;left:0;right:0;top:0;
+      height:env(safe-area-inset-top);background:var(--ink);
+    }
     #mbar .mark{width:28px;height:28px;flex:0 0 28px;font-size:14px}
     #mbar .m-title{
       flex:1;min-width:0;font-size:14px;font-weight:600;color:var(--text);
