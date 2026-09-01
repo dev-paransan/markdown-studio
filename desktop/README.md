@@ -170,6 +170,15 @@ rcedit로 재기록(아이콘·버전)하면서 바이트가 바뀌어, Microsof
 - 파일 연결은 위 `pack:portable` 산출물의 exe로 지정한다:
   `dist\MarkdownStudio-portable\Markdown Studio.exe`
 - 편집 모드로 열리게 하려면 `main.js`의 `openFileInWindow` 안 `readonly:true`를 `false`로 바꾼 뒤 재빌드.
+- 이렇게 연 문서에는 File System Access 핸들이 없다. 그래서 `openFileInWindow`가 원본 경로를
+  문서에 `nativePath`로 실어 보내고, 뷰어에서 편집 모드로 바꾼 뒤 **저장**을 누르면
+  `preload.js`(contextBridge `window.mdsNative.saveFile`) → 메인의 `mds:save-file` 핸들러가
+  그 경로를 그대로 덮어쓴다. 이 처리가 없으면 저장이 '다른 이름으로 저장' 창으로 떨어진다.
+  메인 쪽에서 **마크다운/텍스트 확장자 + 이미 존재하는 파일**만 허용해 임의 경로 쓰기를 막는다.
+- 같은 경로 정보를 상대경로 그림에도 쓴다. 문서가 `![](사진.png)` 처럼 참조하면 `mds:read-image`
+  핸들러가 **그 문서 파일이 있는 폴더**에서 찾아 data URI 로 돌려주므로, 데스크톱에서는
+  '폴더에서 열기' 없이 그림이 바로 보인다(이미지 확장자·24MB·상대경로만 허용).
+  '열기'·'만들기'로 만든 문서도 `webUtils.getPathForFile` 로 경로를 확보해 같게 동작한다.
 
 ## 단일 .exe(자체압축 실행파일)로 만들고 싶다면
 
@@ -184,7 +193,8 @@ rcedit로 재기록(아이콘·버전)하면서 바이트가 바뀌어, Microsof
 
 | 파일 | 역할 |
 |---|---|
-| `main.js` | Electron 메인 프로세스. `app://` 스킴 등록·서빙, 창 생성, 파일 연결(더블클릭) 오픈, 우클릭 편집 컨텍스트 메뉴(복사/붙여넣기 등), 보안 하드닝(sandbox·권한 화이트리스트·네비게이션 차단), 셀프테스트 스위치 |
+| `main.js` | Electron 메인 프로세스. `app://` 스킴 등록·서빙, 창 생성, 파일 연결(더블클릭) 오픈, 원본 경로 덮어쓰기 IPC(`mds:save-file`), 우클릭 편집 컨텍스트 메뉴(복사/붙여넣기 등), 보안 하드닝(sandbox·권한 화이트리스트·네비게이션 차단), 셀프테스트 스위치 |
+| `preload.js` | 샌드박스 프리로드. `contextBridge`로 `window.mdsNative` 세 가지만 노출한다 — `saveFile`(원본 덮어쓰기) · `readImage`(문서 폴더의 상대경로 그림 읽기) · `pathForFile`(File → 실제 경로) |
 | `package.json` | 의존성·빌드 스크립트(`pack`/`pack:portable`/`dist`) |
 | `build-portable.ps1` | SAC 통과용 서명 보존 포터블 빌드 생성 스크립트(`npm run pack:portable`) |
 | `icon.ico` | 앱/실행파일 아이콘(256~16px) |
