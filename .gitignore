@@ -15,9 +15,11 @@ android-app/android/capacitor-cordova-android-plugins/build/
 android-app/keystore/
 android-app/keystore.properties
 android-app/android/local.properties
+desktop/codesign/
 *.keystore
 *.jks
 *.p12
+*.pfx
 .env
 .env.*
 
