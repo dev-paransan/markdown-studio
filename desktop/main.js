@@ -3,7 +3,7 @@
 // 서빙해 보안 컨텍스트를 확보한다. 이렇게 해야 File System Access API
 // (showOpenFilePicker / showSaveFilePicker) 와 IndexedDB(Recents)가 정상 동작한다.
 
-const { app, BrowserWindow, protocol, net, shell, session, Menu, clipboard, dialog } = require("electron");
+const { app, BrowserWindow, protocol, net, shell, session, Menu, clipboard, dialog, ipcMain } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const url = require("url");
@@ -72,9 +72,9 @@ function openFileInWindow(win, filePath) {
       if(typeof docs==='undefined' || typeof select!=='function' || typeof uid!=='function') return "not-ready";
       var __n=${JSON.stringify(name)}, __t=${JSON.stringify(text)};
       var ex=docs.find(function(d){return d.name===__n && d.text===__t;});
-      if(ex){ select(ex.id); if(typeof touchRecent==='function') await touchRecent(ex); return "dup"; }
+      if(ex){ ex.nativePath = ex.nativePath || ${JSON.stringify(filePath)}; select(ex.id); if(typeof touchRecent==='function') await touchRecent(ex); return "dup"; }
       var id=uid();
-      var d={id:id, name:__n, text:__t, dirty:false, handle:null, readonly:true};
+      var d={id:id, name:__n, text:__t, dirty:false, handle:null, readonly:true, nativePath:${JSON.stringify(filePath)}};
       docs.push(d);
       select(id);
       if(typeof touchRecent==='function') await touchRecent(d);   // 최근 파일에 등록(핸들 없으므로 본문 보관)
@@ -83,6 +83,51 @@ function openFileInWindow(win, filePath) {
   })()`;
   return win.webContents.executeJavaScript(js, true);
 }
+
+// 저장 브리지 — 탐색기에서 더블클릭으로 연 문서(FSA 핸들 없음)를 원본 경로에 덮어쓴다.
+// 임의 경로 쓰기를 막기 위해 ① 마크다운/텍스트 확장자이고 ② 이미 존재하는 파일일 때만 허용한다
+// (새 파일 만들기는 웹 앱의 '다른 이름으로 저장'(FSA) 경로가 담당).
+const SAVABLE_EXT = new Set([".md", ".markdown", ".mdown", ".mkd", ".txt"]);
+ipcMain.handle("mds:save-file", (_event, payload) => {
+  try {
+    const p = payload && payload.path, text = payload && payload.text;
+    if (typeof p !== "string" || typeof text !== "string") return { ok: false, error: "잘못된 요청" };
+    const abs = path.resolve(p);
+    if (!SAVABLE_EXT.has(path.extname(abs).toLowerCase())) return { ok: false, error: "허용되지 않는 확장자" };
+    if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) return { ok: false, error: "원본 파일을 찾을 수 없음" };
+    fs.writeFileSync(abs, text, "utf8");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
+  }
+});
+
+// 상대경로 이미지 읽기 — 문서가 ![](사진.png) 처럼 참조한 그림을, 그 문서 파일이 있는 폴더를
+// 기준으로 찾아 data URI 로 돌려준다. 데스크톱에서는 이것만으로 '폴더에서 열기' 없이 그림이 보인다.
+// 문서가 임의 파일을 읽어 가지 못하도록 ① 이미지 확장자 ② 상대경로(드라이브·루트 절대경로 금지)
+// ③ 크기 상한만 통과시킨다.
+const IMG_MIME = {
+  ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
+  ".webp": "image/webp", ".bmp": "image/bmp", ".avif": "image/avif", ".ico": "image/x-icon",
+};
+const IMG_MAX_BYTES = 24 * 1024 * 1024;
+ipcMain.handle("mds:read-image", (_event, payload) => {
+  try {
+    const base = payload && payload.base, rel = payload && payload.rel;
+    if (typeof base !== "string" || typeof rel !== "string" || !rel) return { ok: false };
+    let clean = rel.split(/[?#]/)[0];
+    try { clean = decodeURIComponent(clean); } catch (_) { /* 인코딩이 아니면 원문 그대로 */ }
+    if (/^[a-zA-Z]+:/.test(clean) || /^[\\/]/.test(clean)) return { ok: false };   // 상대경로만
+    const abs = path.resolve(path.dirname(base), clean);
+    const mime = IMG_MIME[path.extname(abs).toLowerCase()];
+    if (!mime) return { ok: false };
+    const st = fs.statSync(abs);
+    if (!st.isFile() || st.size > IMG_MAX_BYTES) return { ok: false };
+    return { ok: true, dataUrl: "data:" + mime + ";base64," + fs.readFileSync(abs).toString("base64") };
+  } catch (e) {
+    return { ok: false };
+  }
+});
 
 // 시작 시 넘어온 파일(있으면). did-finish-load 이후 렌더러에 주입한다.
 let pendingFile = fileArgFrom(process.argv);
@@ -93,19 +138,51 @@ let pendingFile = fileArgFrom(process.argv);
 // 프로덕션 일반 실행에는 아무 영향이 없다.
 const SELFTEST = process.env.MDS_SELFTEST === "1" || process.argv.includes("--selftest");
 async function runSelfTest(win) {
-  const CHECK = `(() => {
+  const CHECK = `(async () => {
     const R = [];
     const ok = (n, c, d) => R.push({ name: n, pass: !!c, detail: d || "" });
-    ok("부팅: 편집기 DOM", !!document.getElementById("editor") && !!document.getElementById("preview"));
-    ok("보안 컨텍스트", window.isSecureContext === true);
-    ok("FSA 사용 가능", typeof FSA !== "undefined" && FSA === true);
-    const h = render("# H\\n\\n**b**\\n", true);
-    ok("마크다운 렌더", /<h1[ >]/.test(h) && h.includes("<strong>b</strong>"));
-    ok("열린 문서 상태", true, (typeof docs !== "undefined")
-      ? ("docs=" + docs.length + " [" + docs.map(function(d){return d.name + (d.readonly ? "(RO)" : "");}).join(", ") + "]")
-      : "docs 미정의");
-    ok("최근 파일 등록", typeof recents !== "undefined" && recents.length >= 1,
-      (typeof recents !== "undefined") ? ("recents=" + recents.length + " [" + recents.map(function(r){return r.name;}).join(", ") + "]") : "recents 미정의");
+    try {
+      ok("부팅: 편집기 DOM", !!document.getElementById("editor") && !!document.getElementById("preview"));
+      ok("보안 컨텍스트", window.isSecureContext === true);
+      ok("FSA 사용 가능", typeof FSA !== "undefined" && FSA === true);
+      const h = render("# H\\n\\n**b**\\n", true);
+      ok("마크다운 렌더", /<h1[ >]/.test(h) && h.includes("<strong>b</strong>"));
+      ok("열린 문서 상태", true, (typeof docs !== "undefined")
+        ? ("docs=" + docs.length + " [" + docs.map(function(d){return d.name + (d.readonly ? "(RO)" : "");}).join(", ") + "]")
+        : "docs 미정의");
+      ok("최근 파일 등록", typeof recents !== "undefined" && recents.length >= 1,
+        (typeof recents !== "undefined") ? ("recents=" + recents.length + " [" + recents.map(function(r){return r.name;}).join(", ") + "]") : "recents 미정의");
+
+      // 탐색기(파일 연결)로 연 문서는 FSA 핸들이 없다 → 원본 경로 + 네이티브 저장 브리지로 덮어써야 한다.
+      // 인수로 .md 를 넘겨 셀프테스트를 돌렸을 때만(nativePath 가 있을 때만) 검사한다.
+      const bridge = !!(window.mdsNative && typeof window.mdsNative.saveFile === "function");
+      ok("네이티브 저장 브리지 노출", bridge);
+      const nd = (typeof docs !== "undefined") ? docs.find(function(d){ return !!d.nativePath; }) : null;
+      if (bridge && nd) {
+        select(nd.id);
+        nd.readonly = false; nd.dirty = true;
+        nd.text = nd.text + String.fromCharCode(10) + "<!-- selftest -->" + String.fromCharCode(10);
+        await saveDoc();
+        ok("네이티브 저장: 원본 덮어쓰기", nd.dirty === false, "dirty=" + nd.dirty + " path=" + nd.nativePath);
+        const bad = await window.mdsNative.saveFile("C:/Windows/System32/mds-selftest.dll", "x");
+        ok("네이티브 저장: 허용 밖 경로 거부", !(bad && bad.ok), JSON.stringify(bad));
+
+        // 상대경로 이미지 — 문서 파일이 있는 폴더에서 찾아 미리보기에 채워야 한다('폴더에서 열기' 없이).
+        const rd = await window.mdsNative.readImage(nd.nativePath, "mds-selftest.png");
+        ok("상대경로 이미지: 브리지 읽기", !!(rd && rd.ok && String(rd.dataUrl || "").startsWith("data:image/png;base64,")),
+           JSON.stringify(rd && rd.ok));
+        const bad2 = await window.mdsNative.readImage(nd.nativePath, "../../../Windows/win.ini");
+        ok("상대경로 이미지: 이미지 아닌 파일 거부", !(bad2 && bad2.ok), JSON.stringify(bad2));
+        nd.text = "![p](mds-selftest.png)";
+        select(nd.id); flushRender();
+        await localImagesReady;
+        const im = document.querySelector("#preview img");
+        ok("상대경로 이미지: 미리보기 치환", !!im && String(im.getAttribute("src") || "").startsWith("data:image/png"),
+           im ? (im.getAttribute("src") || "").slice(0, 40) : "img 없음");
+      }
+    } catch (e) {
+      ok("셀프테스트 예외", false, String((e && e.stack) || e));   // 렌더러 예외를 결과로 실어 보낸다
+    }
     return R;
   })()`;
   const outPath = process.env.MDS_SELFTEST_OUT || path.join(require("os").tmpdir(), "mds-selftest.json");
@@ -153,7 +230,8 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,       // 렌더러와 Electron 내부 컨텍스트 격리
       nodeIntegration: false,       // 렌더러에서 Node API 접근 차단
-      sandbox: true,                // 렌더러 샌드박스화 (프리로드 없음 → 안전)
+      sandbox: true,                // 렌더러 샌드박스화 (프리로드는 contextBridge 로 최소 표면만 노출)
+      preload: path.join(__dirname, "preload.js"),
       webSecurity: true,            // 동일 출처 정책·CSP 강제(기본값이나 명시)
       allowRunningInsecureContent: false,
       spellcheck: false,
@@ -322,7 +400,9 @@ if (!gotLock) {
   app.whenReady().then(() => {
     // 권한 요청 화이트리스트 — 앱이 실제로 쓰는 것만 허용하고 나머지(위치·카메라·마이크·
     // 알림·MIDI·USB 등)는 모두 거부한다. 클립보드 쓰기는 실패해도 앱이 execCommand 로 폴백한다.
-    const ALLOWED_PERMS = new Set(["clipboard-read", "clipboard-sanitized-write", "local-fonts"]);
+    // "fileSystem" 은 File System Access API(사용자가 피커로 직접 고른 파일) 전용이다. 허용하지 않으면
+    // '열기'로 연 원본에 쓰기 권한을 못 받아 저장이 '다른 이름으로 저장'으로 떨어진다.
+    const ALLOWED_PERMS = new Set(["clipboard-read", "clipboard-sanitized-write", "local-fonts", "fileSystem"]);
     session.defaultSession.setPermissionRequestHandler((wc, permission, callback) => {
       callback(ALLOWED_PERMS.has(permission));
     });
