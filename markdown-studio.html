@@ -1652,7 +1652,7 @@ function paintChrome(d){
   $("#stName").textContent = d ? d.name + (d.dirty ? " •" : "") : "—";
   $("#stRo").textContent = d ? (d.readonly ? T("읽기전용 · 편집하기", "Read-only · Edit") : T("편집 중 · 읽기전용으로", "Editing · Make read-only")) : "";
   $("#stRo").classList.toggle("locked", !!(d && d.readonly));
-  $("#stLink").textContent = d ? (d.handle ? "● 원본 연결됨" : "○ 미연결") : "";
+  $("#stLink").textContent = d ? ((d.handle || d.nativePath) ? "● 원본 연결됨" : "○ 미연결") : "";
   $("#stFind").hidden = !d;                          // 뷰어에서도 찾기 가능 — 문서가 없을 때만 숨김
   if(!d && fbOpen) closeFind();
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
@@ -1942,6 +1942,24 @@ window.addEventListener("keydown", e => { if(e.key === "Escape" && !tmplModal.hi
 
 /* 열기 (ro = 읽기전용) */
 async function openDoc(ro = false){
+  // 데스크톱: 네이티브 열기 대화상자로 실제 경로를 확보한다. FSA(showOpenFilePicker)로 열면
+  // webUtils.getPathForFile 가 빈 값을 줘 nativePath 가 비고 상대경로 이미지(![](사진.png))가 안 뜬다.
+  if(window.mdsNative && typeof window.mdsNative.openFile === "function"){
+    let res;
+    try{ res = await window.mdsNative.openFile(); }catch{ return; }
+    if(!res || res.canceled || !res.files || !res.files.length) return;
+    let last = null;
+    for(const f of res.files){
+      let dup = null;                                 // 이미 열린 같은 경로면 그 탭으로
+      for(const d of docs) if(d.nativePath && d.nativePath === f.path){ dup = d; break; }
+      if(dup){ last = dup.id; continue; }
+      const d = { id: uid(), name: f.name, text: f.text, dirty: false, handle: null,
+                  readonly: ro, dir: null, nativePath: f.path };
+      docs.push(d); await touchRecent(d); last = d.id;
+    }
+    if(last) select(last);
+    return;
+  }
   if(!FSA){ $("#picker").dataset.ro = ro ? "1" : ""; return $("#picker").click(); }
   let handles;
   try{

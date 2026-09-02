@@ -129,6 +129,32 @@ ipcMain.handle("mds:read-image", (_event, payload) => {
   }
 });
 
+// 네이티브 열기 대화상자 — FSA(showOpenFilePicker)로 연 파일은 webUtils.getPathForFile 가 빈 값을
+// 돌려줘 nativePath 가 비고(→ 상대경로 이미지·제자리 저장 불가), 그래서 데스크톱에서는 이 네이티브
+// 대화상자로 실제 경로를 확보해 문서를 연다. 마크다운/텍스트만, 다중 선택 허용.
+ipcMain.handle("mds:open-file", async (_event) => {
+  try {
+    const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0] || null;
+    const opts = {
+      properties: ["openFile", "multiSelections"],
+      filters: [
+        { name: "Markdown", extensions: ["md", "markdown", "mdown", "txt"] },
+        { name: "All Files", extensions: ["*"] },
+      ],
+    };
+    const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+    if (res.canceled || !res.filePaths || !res.filePaths.length) return { canceled: true, files: [] };
+    const files = [];
+    for (const p of res.filePaths) {
+      try { files.push({ path: p, name: path.basename(p), text: fs.readFileSync(p, "utf8") }); }
+      catch (_) { /* 못 읽는 파일은 건너뛴다 */ }
+    }
+    return { canceled: false, files };
+  } catch (e) {
+    return { canceled: true, files: [], error: String((e && e.message) || e) };
+  }
+});
+
 // 시작 시 넘어온 파일(있으면). did-finish-load 이후 렌더러에 주입한다.
 let pendingFile = fileArgFrom(process.argv);
 
