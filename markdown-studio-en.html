@@ -129,6 +129,9 @@
   }
   .tab .x:hover{background:#dcdcd4;color:var(--text)}
   .tab .mod{width:6px;height:6px;border-radius:50%;background:var(--amber);flex:0 0 6px;margin-left:auto}
+  .tab.dragging{opacity:.45}
+  .tab.drop-before{box-shadow:inset 2px 0 0 var(--accent)}
+  .tab.drop-after{box-shadow:inset -2px 0 0 var(--accent)}
 
   #stage{flex:1;display:flex;min-height:0;position:relative}
 
@@ -183,6 +186,10 @@
   #fbToggleRep.open svg{transform:rotate(90deg)}
   #findBar .fb-btn{width:auto;flex:0 0 auto;padding:0 10px;font-size:11.5px;border:1px solid var(--rule);border-radius:6px;color:var(--sb-text)}
   #findBar .fb-btn:hover{background:var(--sb-hover);color:var(--text)}
+  /* 뷰어(읽기전용) 찾기 — 바꾸기 UI 숨김, 렌더된 미리보기를 Custom Highlight 로 강조 */
+  #findBar.viewer #fbToggleRep,#findBar.viewer #fbRepRow{display:none}
+  ::highlight(mds-find){background:rgba(255,193,7,.40)}
+  ::highlight(mds-find-cur){background:#ffc107;color:#1a1a1a}
 
   /* resizer */
   #split{
@@ -634,33 +641,34 @@
       <div id="gutter"></div>
       <div id="fbHi" aria-hidden="true" hidden></div>
       <textarea id="editor" spellcheck="false" placeholder="Write your Markdown here."></textarea>
-      <div id="findBar" hidden>
-        <div class="fb-row">
-          <input id="fbFind" type="text" placeholder="Find" autocomplete="off" spellcheck="false">
-          <button id="fbCase" title="Match case">Aa</button>
-          <span id="fbCount">0/0</span>
-          <button id="fbPrev" title="Previous (⇧Enter)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
-          </button>
-          <button id="fbNext" title="Next (Enter)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-          </button>
-          <button id="fbToggleRep" title="Show/hide replace">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
-          </button>
-          <button id="fbClose" title="Close (Esc)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-          </button>
-        </div>
-        <div class="fb-row" id="fbRepRow" hidden>
-          <input id="fbReplace" type="text" placeholder="Replace" autocomplete="off" spellcheck="false">
-          <button id="fbRep1" class="fb-btn">Replace</button>
-          <button id="fbRepAll" class="fb-btn">Replace all</button>
-        </div>
-      </div>
     </div>
     <div id="split" role="separator" aria-orientation="vertical" tabindex="0" title="Drag to resize"></div>
     <div id="pvPane"><article id="preview"></article></div>
+
+    <div id="findBar" hidden>
+      <div class="fb-row">
+        <input id="fbFind" type="text" placeholder="Find" autocomplete="off" spellcheck="false">
+        <button id="fbCase" title="Match case">Aa</button>
+        <span id="fbCount">0/0</span>
+        <button id="fbPrev" title="Previous (⇧Enter)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
+        </button>
+        <button id="fbNext" title="Next (Enter)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <button id="fbToggleRep" title="Show/hide replace">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+        <button id="fbClose" title="Close (Esc)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="fb-row" id="fbRepRow" hidden>
+        <input id="fbReplace" type="text" placeholder="Replace" autocomplete="off" spellcheck="false">
+        <button id="fbRep1" class="fb-btn">Replace</button>
+        <button id="fbRepAll" class="fb-btn">Replace all</button>
+      </div>
+    </div>
 
     <div id="empty">
       <div class="box">
@@ -1551,7 +1559,7 @@ $("#recents").addEventListener("click", e => {
 /* ─────────── 탭 ─────────── */
 function drawTabs(){
   $("#tabbar").innerHTML = docs.map(d =>
-    `<div class="tab ${d.id === active ? "on" : ""}" data-id="${d.id}" title="${esc(d.name)}${d.readonly ? " (read-only)" : ""}">
+    `<div class="tab ${d.id === active ? "on" : ""}" draggable="true" data-id="${d.id}" title="${esc(d.name)}${d.readonly ? " (read-only)" : ""}">
        <span class="t-nm">${esc(d.name)}</span>
        ${d.readonly ? '<span class="ro">RO</span>' : ""}
        ${d.dirty ? '<span class="mod" title="Unsaved"></span>' : ""}
@@ -1564,6 +1572,50 @@ $("#tabbar").addEventListener("click", e => {
   if(x){ closeDoc(x.dataset.x); return; }
   const t = e.target.closest(".tab");
   if(t) select(t.dataset.id);
+});
+
+/* 탭 드래그로 순서 바꾸기 — docs 배열의 순서를 그대로 재배치한다 */
+let tabDragId = null;
+function clearTabDropMarks(){
+  $("#tabbar").querySelectorAll(".tab").forEach(x => x.classList.remove("drop-before", "drop-after"));
+}
+function reorderTabs(dragId, targetId, after){
+  if(dragId === targetId) return;
+  const from = docs.findIndex(d => d.id === dragId); if(from === -1) return;
+  const [moved] = docs.splice(from, 1);
+  let to = docs.findIndex(d => d.id === targetId);
+  if(to === -1) docs.push(moved); else docs.splice(after ? to + 1 : to, 0, moved);
+  drawTabs();
+}
+$("#tabbar").addEventListener("dragstart", e => {
+  const t = e.target.closest(".tab"); if(!t) return;
+  tabDragId = t.dataset.id;
+  t.classList.add("dragging");
+  e.dataTransfer.effectAllowed = "move";
+  try { e.dataTransfer.setData("text/plain", tabDragId); } catch{}   // Firefox 는 setData 가 있어야 드래그가 시작됨
+});
+$("#tabbar").addEventListener("dragover", e => {
+  if(tabDragId == null) return;
+  e.preventDefault(); e.dataTransfer.dropEffect = "move";
+  const t = e.target.closest(".tab");
+  clearTabDropMarks();
+  if(!t || t.dataset.id === tabDragId) return;
+  const r = t.getBoundingClientRect();
+  t.classList.add(e.clientX > r.left + r.width / 2 ? "drop-after" : "drop-before");
+});
+$("#tabbar").addEventListener("drop", e => {
+  if(tabDragId == null) return;
+  e.preventDefault();
+  const t = e.target.closest(".tab");
+  if(t && t.dataset.id !== tabDragId){
+    const r = t.getBoundingClientRect();
+    reorderTabs(tabDragId, t.dataset.id, e.clientX > r.left + r.width / 2);
+  }
+  tabDragId = null;
+});
+$("#tabbar").addEventListener("dragend", () => {
+  tabDragId = null; clearTabDropMarks();
+  $("#tabbar").querySelectorAll(".tab").forEach(x => x.classList.remove("dragging"));
 });
 
 function select(id){
@@ -1588,7 +1640,7 @@ function select(id){
   document.body.classList.toggle("ro", !!d.readonly);
   drawTabs(); paint();
   if(!d.readonly) editor.focus({ preventScroll: true });   // 포커스가 캐럿까지 스크롤하지 않도록
-  requestAnimationFrame(() => { editor.scrollTop = d.scrollTop || 0; gutter.scrollTop = editor.scrollTop; syncing = false; });
+  requestAnimationFrame(() => { editor.scrollTop = d.scrollTop || 0; gutter.scrollTop = editor.scrollTop; syncing = false; fbRefresh(); });
   setTimeout(() => syncing = false, 200);           // rAF 가 멈춘 상황(숨은 탭)에서도 잠기지 않게
 }
 /* 상태바·라인번호 등 값싼 크롬 갱신(입력마다 즉시). 무거운 미리보기 렌더는 renderPreview 로 분리. */
@@ -1601,8 +1653,8 @@ function paintChrome(d){
   $("#stRo").textContent = d ? (d.readonly ? "Read-only · Edit" : "Editing · Make read-only") : "";
   $("#stRo").classList.toggle("locked", !!(d && d.readonly));
   $("#stLink").textContent = d ? (d.handle ? "● Linked" : "○ Not linked") : "";
-  $("#stFind").hidden = !!(d && d.readonly);
-  if(d && d.readonly && fbOpen) closeFind();
+  $("#stFind").hidden = !d;                          // 뷰어에서도 찾기 가능 — 문서가 없을 때만 숨김
+  if(!d && fbOpen) closeFind();
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
   $("#stCount").textContent = `${words} words · ${text.length} chars`;
   paintMobile(d);
@@ -1619,6 +1671,7 @@ function renderPreview(d){
   ensureFontOption(docViewerFont);
   $("#stFont").value = docViewerFont || "";
   renderMermaid();
+  if(fbOpen && fbViewer) pvSearch();                // 미리보기가 새로 그려졌으면 뷰어 찾기 하이라이트 재계산
 }
 let renderTimer = 0;
 function paint(){                                   // 즉시 렌더(문서 전환·모드 전환 등)
@@ -2988,7 +3041,7 @@ window.addEventListener("keydown", e => {
   else if(k === "p"){ e.preventDefault(); active && exportPdf(); }
   else if(k === "b"){ e.preventDefault(); document.body.classList.toggle("collapsed"); }
   else if(k === "/"){ e.preventDefault(); openGuide(); }
-  else if(k === "f"){ const d = cur(); if(d && !d.readonly){ e.preventDefault(); openFind(false); } }
+  else if(k === "f"){ const d = cur(); if(d){ e.preventDefault(); openFind(false); } }
   else if(k === "h"){ const d = cur(); if(d && !d.readonly){ e.preventDefault(); openFind(true); } }
 });
 
@@ -2996,6 +3049,69 @@ window.addEventListener("keydown", e => {
 const findBar = $("#findBar"), fbFind = $("#fbFind"), fbReplace = $("#fbReplace"), fbRepRow = $("#fbRepRow");
 const fbHi = $("#fbHi");
 let fbOpen = false, fbCase = false, fbMatches = [], fbIndex = -1;
+/* 뷰어(읽기전용) 찾기 상태 — 렌더된 #preview 안의 Range 들을 CSS Custom Highlight 로 강조 */
+let fbViewer = false, pvRanges = [], pvIndex = -1;
+const HL_API = typeof Highlight === "function" && !!(window.CSS && CSS.highlights);
+let findHi, findHiCur;
+if(HL_API){
+  findHi = new Highlight(); findHiCur = new Highlight();
+  CSS.highlights.set("mds-find", findHi);
+  CSS.highlights.set("mds-find-cur", findHiCur);
+}
+function pvClearHi(){
+  if(HL_API){ findHi.clear(); findHiCur.clear(); }
+  else { const s = window.getSelection(); if(s) s.removeAllRanges(); }
+}
+/* 미리보기 안의 보이는 텍스트 노드를 훑어 검색어 Range 를 모은다(코드 툴바·select 등은 제외) */
+function pvFindAll(){
+  pvRanges = [];
+  const q = fbFind.value; if(!q) return;
+  const needle = fbCase ? q : q.toLowerCase();
+  const walker = document.createTreeWalker(preview, NodeFilter.SHOW_TEXT, {
+    acceptNode(n){
+      if(!n.nodeValue || !n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+      const p = n.parentElement; if(!p) return NodeFilter.FILTER_REJECT;
+      const tag = p.tagName;
+      if(tag === "STYLE" || tag === "SCRIPT" || tag === "SELECT" || tag === "OPTION") return NodeFilter.FILTER_REJECT;
+      if(p.closest(".cb-bar")) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+  let node;
+  while((node = walker.nextNode())){
+    const text = node.nodeValue, hay = fbCase ? text : text.toLowerCase();
+    let i = 0, idx;
+    while((idx = hay.indexOf(needle, i)) !== -1){
+      const r = document.createRange();
+      r.setStart(node, idx); r.setEnd(node, idx + needle.length);
+      pvRanges.push(r); i = idx + needle.length;
+    }
+  }
+}
+function pvScrollIntoView(range){
+  const pane = $("#pvPane"), rect = range.getBoundingClientRect();
+  if(rect.height === 0 && rect.width === 0) return;
+  const pr = pane.getBoundingClientRect();
+  pane.scrollTop = Math.max(0, pane.scrollTop + (rect.top - pr.top) - pane.clientHeight / 2 + rect.height / 2);
+}
+function pvGoto(i){
+  if(!pvRanges.length){ pvIndex = -1; pvClearHi(); fbUpdateCount(); return; }
+  pvIndex = ((i % pvRanges.length) + pvRanges.length) % pvRanges.length;
+  const curR = pvRanges[pvIndex];
+  if(HL_API){
+    findHi.clear(); findHiCur.clear();
+    pvRanges.forEach((r, j) => (j === pvIndex ? findHiCur : findHi).add(r));
+  } else {
+    const s = window.getSelection(); s.removeAllRanges(); s.addRange(curR);
+  }
+  pvScrollIntoView(curR);
+  fbUpdateCount();
+}
+function pvSearch(){
+  pvFindAll();
+  if(!pvRanges.length){ pvIndex = -1; pvClearHi(); fbUpdateCount(); return; }
+  pvGoto(0);
+}
 
 function fbMeasureText(text){                          // 한글 등 가변폭 글자를 고려해 실제 렌더 폭(px)을 측정
   const span = document.createElement("span");
@@ -3032,7 +3148,9 @@ function fbScrollToCaret(){
   gutter.scrollTop = editor.scrollTop;
 }
 function fbUpdateCount(){
-  $("#fbCount").textContent = fbMatches.length ? `${fbIndex + 1}/${fbMatches.length}` : "0/0";
+  const n = fbViewer ? pvRanges.length : fbMatches.length;
+  const i = fbViewer ? pvIndex : fbIndex;
+  $("#fbCount").textContent = n ? `${i + 1}/${n}` : "0/0";
 }
 function fbFindAll(){
   const q = fbFind.value;
@@ -3053,24 +3171,46 @@ function fbGoto(i){
   fbUpdateCount();
 }
 function fbSearch(){
+  if(fbViewer){ pvSearch(); return; }               // 뷰어: 렌더된 미리보기에서 검색
   fbFindAll();
   if(!fbMatches.length){ fbIndex = -1; fbHi.hidden = true; fbUpdateCount(); return; }
   const pos = editor.selectionEnd;
   const i = fbMatches.findIndex(m => m >= pos);
   fbGoto(i === -1 ? 0 : i);
 }
-function openFind(withReplace){
-  const d = cur(); if(!d || d.readonly) return;     // 읽기전용(뷰어)에서는 브라우저 기본 찾기를 그대로 둔다
+function fbStep(delta){                              // 이전/다음 — 모드에 맞게 이동
+  if(fbViewer) pvGoto(pvIndex + delta); else fbGoto(fbIndex + delta);
+}
+function openFind(withReplace, keepQuery){
+  const d = cur(); if(!d) return;
+  fbViewer = !!d.readonly;                           // 읽기전용 문서면 뷰어 찾기 모드
   findBar.hidden = false; fbOpen = true;
-  if(withReplace) fbSetRepOpen(true);
-  const sel = editor.value.slice(editor.selectionStart, editor.selectionEnd);
-  if(sel && !sel.includes("\n")) fbFind.value = sel;
+  findBar.classList.toggle("viewer", fbViewer);
+  if(fbViewer){
+    fbSetRepOpen(false);
+    if(!keepQuery){ const s = String(window.getSelection()); if(s && !s.includes("\n")) fbFind.value = s; }
+  } else {
+    if(withReplace) fbSetRepOpen(true);
+    if(!keepQuery){ const sel = editor.value.slice(editor.selectionStart, editor.selectionEnd); if(sel && !sel.includes("\n")) fbFind.value = sel; }
+  }
   fbFind.focus(); fbFind.select();
   fbSearch();
 }
+/* 편집↔뷰어 전환·문서 전환 시 열려 있던 찾기 바를 새 모드로 다시 맞춘다(포커스는 건드리지 않음) */
+function fbRefresh(){
+  if(!fbOpen) return;
+  const d = cur(); if(!d){ closeFind(); return; }
+  fbViewer = !!d.readonly;
+  findBar.classList.toggle("viewer", fbViewer);
+  if(fbViewer) fbSetRepOpen(false);
+  fbSearch();
+}
 function closeFind(){
-  findBar.hidden = true; fbOpen = false; fbMatches = []; fbIndex = -1; fbHi.hidden = true;
-  editor.focus({ preventScroll: true });
+  findBar.hidden = true; fbOpen = false;
+  fbMatches = []; fbIndex = -1; fbHi.hidden = true;
+  pvRanges = []; pvIndex = -1; pvClearHi();
+  if(!fbViewer) editor.focus({ preventScroll: true });   // 뷰어에선 에디터가 숨겨져 있으므로 포커스 이동 생략
+  fbViewer = false;
 }
 function fbSetRepOpen(on){
   fbRepRow.hidden = !on;
@@ -3109,7 +3249,7 @@ function fbReplaceAll(){
 }
 fbFind.addEventListener("input", () => fbSearch());
 fbFind.addEventListener("keydown", e => {
-  if(e.key === "Enter"){ e.preventDefault(); e.shiftKey ? fbGoto(fbIndex - 1) : fbGoto(fbIndex + 1); }
+  if(e.key === "Enter"){ e.preventDefault(); fbStep(e.shiftKey ? -1 : 1); }
   else if(e.key === "Escape"){ e.preventDefault(); closeFind(); }
 });
 fbReplace.addEventListener("keydown", e => {
@@ -3121,8 +3261,8 @@ $("#fbCase").addEventListener("click", () => {
   $("#fbCase").classList.toggle("on", fbCase);
   fbSearch();
 });
-$("#fbPrev").addEventListener("click", () => fbGoto(fbIndex - 1));
-$("#fbNext").addEventListener("click", () => fbGoto(fbIndex + 1));
+$("#fbPrev").addEventListener("click", () => fbStep(-1));
+$("#fbNext").addEventListener("click", () => fbStep(1));
 $("#fbToggleRep").addEventListener("click", () => fbSetRepOpen(fbRepRow.hidden));
 $("#fbClose").addEventListener("click", closeFind);
 $("#fbRep1").addEventListener("click", fbReplaceOne);
