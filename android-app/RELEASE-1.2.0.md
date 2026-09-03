@@ -3,16 +3,16 @@
 유형: 릴리스 노트
 플랫폼: Android
 버전: 1.2.0
-versionCode: 4
+versionCode: 5
 빌드일: 2026-09-03
-이전 배포판: 1.1.1 (versionCode 3)
+이전 배포판: 1.1.2 (versionCode 4)
 ---
 
 # Markdown Studio for Android — v1.2.0
 
 의존성 없는 단일 파일 마크다운 에디터의 안드로이드 빌드입니다.
-Play 게시본 **1.1.1(versionCode 3)** 이후의 신규 기능과 수정을 담았습니다.
-운영 키스토어(`mds-prod`)로 서명된 `app-release.aab`(versionCode 4)를 업로드합니다.
+Play 게시본 **1.1.2(versionCode 4)** 이후의 신규 기능과 수정을 담았습니다.
+운영 키스토어(`mds-prod`)로 서명된 `app-release.aab`(versionCode 5)를 업로드합니다.
 
 ## ✨ 새로운 기능
 
@@ -60,7 +60,7 @@ Play 게시본 **1.1.1(versionCode 3)** 이후의 신규 기능과 수정을 담
 - 같은 파일을 여러 번 열었을 때 **최근 파일 목록에 중복**으로 쌓이던 문제를 고쳤습니다.
 
 ## 📦 배포물
-- `app-release.aab` — Play Console 업로드용 App Bundle (versionCode 4, 운영 키 `mds-prod` 서명)
+- `app-release.aab` — Play Console 업로드용 App Bundle (versionCode 5, 운영 키 `mds-prod` 서명)
 - `app-release.apk` — 사이드로드·직접 배포용 (동일 서명)
 - 산출물 경로: `android-app/android/app/build/outputs/`
 
