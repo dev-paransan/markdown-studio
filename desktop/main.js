@@ -60,8 +60,10 @@ function fileArgFrom(argv) {
 
 // 파일 내용을 읽어 렌더러(웹 앱)에 읽기전용 문서로 넣고 활성화한다.
 // 웹 앱의 전역(docs/uid/select)을 그대로 사용한다. 이미 같은 내용이 열려 있으면 그 탭으로 전환.
-function openFileInWindow(win, filePath) {
+// opts.recent === false 면 최근 파일 목록에 등록하지 않는다(릴리스 노트처럼 앱이 여는 안내 문서용).
+function openFileInWindow(win, filePath, opts) {
   if (!win || win.isDestroyed()) return Promise.resolve("no-window");
+  const recent = !opts || opts.recent !== false;
   let text;
   try { text = fs.readFileSync(filePath, "utf8"); }
   catch (e) { return Promise.resolve("read-fail:" + (e && e.message || e)); }
@@ -70,14 +72,14 @@ function openFileInWindow(win, filePath) {
   const js = `(async function(){
     try{
       if(typeof docs==='undefined' || typeof select!=='function' || typeof uid!=='function') return "not-ready";
-      var __n=${JSON.stringify(name)}, __t=${JSON.stringify(text)};
+      var __n=${JSON.stringify(name)}, __t=${JSON.stringify(text)}, __rec=${recent ? "true" : "false"};
       var ex=docs.find(function(d){return d.name===__n && d.text===__t;});
-      if(ex){ ex.nativePath = ex.nativePath || ${JSON.stringify(filePath)}; select(ex.id); if(typeof touchRecent==='function') await touchRecent(ex); return "dup"; }
+      if(ex){ ex.nativePath = ex.nativePath || ${JSON.stringify(filePath)}; select(ex.id); if(__rec && typeof touchRecent==='function') await touchRecent(ex); return "dup"; }
       var id=uid();
       var d={id:id, name:__n, text:__t, dirty:false, handle:null, readonly:true, nativePath:${JSON.stringify(filePath)}};
       docs.push(d);
       select(id);
-      if(typeof touchRecent==='function') await touchRecent(d);   // 최근 파일에 등록(핸들 없으므로 본문 보관)
+      if(__rec && typeof touchRecent==='function') await touchRecent(d);   // 최근 파일에 등록(핸들 없으므로 본문 보관)
       return "opened";
     }catch(e){ return "err:"+(e&&e.message||e); }
   })()`;
@@ -154,6 +156,129 @@ ipcMain.handle("mds:open-file", async (_event) => {
     return { canceled: true, files: [], error: String((e && e.message) || e) };
   }
 });
+
+// ── 릴리스 노트 찾기 ─────────────────────────────────────────
+// desktop/ 에 RELEASE-x.y.z.md 로 릴리스 노트를 둔다. 개발 실행에서는 __dirname(=desktop)에서,
+// 패키징 실행에서는 resources/ 에서 찾는다(package.json 의 extraResources 로 함께 복사). 여러 개면
+// 버전이 가장 높은 것을 고른다.
+function cmpVer(a, b) {
+  for (let i = 0; i < 3; i++) { const d = (a[i] || 0) - (b[i] || 0); if (d) return d; }
+  return 0;
+}
+function findReleaseNotes() {
+  const dirs = [process.resourcesPath, __dirname, path.join(__dirname, ".."), BASE_DIR].filter(Boolean);
+  let best = null, bestV = [-1, 0, 0];
+  const seen = new Set();
+  for (const dir of dirs) {
+    if (seen.has(dir)) continue;
+    seen.add(dir);
+    let files;
+    try { files = fs.readdirSync(dir); } catch (_) { continue; }
+    for (const f of files) {
+      const m = /^RELEASE-(\d+)\.(\d+)\.(\d+)\.md$/i.exec(f);
+      if (!m) continue;
+      const v = [Number(m[1]), Number(m[2]), Number(m[3])];
+      if (cmpVer(v, bestV) > 0) { bestV = v; best = path.join(dir, f); }
+    }
+  }
+  return best;
+}
+
+// 도움말 → 릴리스 노트: 최신 RELEASE-*.md 를 앱 안 읽기전용 뷰어로 연다(최근 파일에는 넣지 않음).
+function openReleaseNotes() {
+  const win = BrowserWindow.getFocusedWindow() || mruWindow();
+  if (!win) return;
+  if (win.isMinimized()) win.restore();
+  win.focus();
+  const p = findReleaseNotes();
+  if (!p) {
+    dialog.showMessageBox(win, { type: "info", noLink: true, buttons: ["확인"],
+      title: "릴리스 노트", message: "릴리스 노트 파일을 찾을 수 없습니다." });
+    return;
+  }
+  openFileInWindow(win, p, { recent: false });
+}
+
+function showAbout() {
+  const win = BrowserWindow.getFocusedWindow() || mruWindow() || undefined;
+  dialog.showMessageBox(win, {
+    type: "info", noLink: true, buttons: ["확인"],
+    title: "Markdown Studio 정보",
+    message: "Markdown Studio",
+    detail: "버전 " + app.getVersion() + "\n© 2026 Samsung Asset Management Co.",
+  });
+}
+
+// ── 창 포커스 순서(MRU) 추적 ─────────────────────────────────
+// 창을 여러 개 띄울 수 있으므로, 탐색기에서 문서를 더블클릭했을 때 '가장 최근에 쓰던 창'에
+// 열어 주기 위해 포커스 순서를 관리한다(맨 앞이 최근).
+const winFocusOrder = [];
+function trackWindow(win) {
+  const bump = () => {
+    const i = winFocusOrder.indexOf(win);
+    if (i >= 0) winFocusOrder.splice(i, 1);
+    winFocusOrder.unshift(win);
+  };
+  win.on("focus", bump);
+  win.on("closed", () => {
+    const i = winFocusOrder.indexOf(win);
+    if (i >= 0) winFocusOrder.splice(i, 1);
+  });
+  bump();
+}
+function mruWindow() {
+  for (const w of winFocusOrder) if (w && !w.isDestroyed()) return w;
+  const all = BrowserWindow.getAllWindows();
+  return all.length ? all[0] : null;
+}
+
+// ── 애플리케이션 메뉴 ────────────────────────────────────────
+// 메뉴 단축키는 웹 앱(렌더러)이 쓰는 것과 겹치지 않게 고른다. 렌더러가 이미 쓰는
+// Ctrl+S/N/O/E/W/B/P·⇧ 조합은 피하고, 새 창은 Ctrl+Shift+N 을 쓴다.
+function buildAppMenu() {
+  const template = [
+    {
+      label: "파일(&F)",
+      submenu: [
+        { label: "새 창", accelerator: "CmdOrCtrl+Shift+N", click: () => createWindow() },
+        { type: "separator" },
+        { role: "close", label: "창 닫기", accelerator: "CmdOrCtrl+Shift+W" },
+        { role: "quit", label: "종료" },
+      ],
+    },
+    {
+      label: "편집(&E)",
+      submenu: [
+        { role: "undo", label: "실행 취소" },
+        { role: "redo", label: "다시 실행" },
+        { type: "separator" },
+        { role: "cut", label: "잘라내기" },
+        { role: "copy", label: "복사" },
+        { role: "paste", label: "붙여넣기" },
+        { role: "selectAll", label: "전체 선택" },
+      ],
+    },
+    {
+      label: "보기(&V)",
+      submenu: [
+        { role: "zoomIn", label: "확대" },
+        { role: "zoomOut", label: "축소" },
+        { role: "resetZoom", label: "기본 크기" },
+        { type: "separator" },
+        { role: "togglefullscreen", label: "전체 화면" },
+      ],
+    },
+    {
+      label: "도움말(&H)",
+      submenu: [
+        { label: "릴리스 노트", click: () => openReleaseNotes() },
+        { type: "separator" },
+        { label: "Markdown Studio 정보", click: () => showAbout() },
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
 
 // 시작 시 넘어온 파일(있으면). did-finish-load 이후 렌더러에 주입한다.
 let pendingFile = fileArgFrom(process.argv);
@@ -251,7 +376,7 @@ function createWindow() {
     minHeight: 480,
     backgroundColor: "#ffffff",
     title: "Markdown Studio",
-    autoHideMenuBar: true,
+    autoHideMenuBar: false,   // 메뉴바 표시(도움말 → 릴리스 노트 등)
     show: !SELFTEST,
     webPreferences: {
       contextIsolation: true,       // 렌더러와 Electron 내부 컨텍스트 격리
@@ -404,22 +529,33 @@ function createWindow() {
     // 일부라도 저장되지 않았으면(취소/권한거부) 창 유지 — 사용자가 다시 시도/판단
   });
 
+  trackWindow(win);   // 포커스 순서(MRU) 추적 — 더블클릭 문서를 최근 창에 연다
   return win;
 }
 
-// 단일 인스턴스 보장 — 앱이 이미 떠 있을 때 .md 를 더블클릭하면 새 창을 띄우지 않고
-// 실행 중인 창에 그 파일을 연다. (셀프테스트는 매번 새 프로세스로 열고 종료하므로 예외)
+// 단일 인스턴스(프로세스는 하나) — 대신 창을 여러 개 띄울 수 있다.
+// 이미 앱이 떠 있을 때 두 번째 실행이 들어오면:
+//  · 파일 인자가 있으면(탐색기에서 .md 더블클릭) → '가장 최근에 쓰던 창'에 그 파일을 연다.
+//  · 파일 인자가 없으면(앱 아이콘 재실행 등) → 새 창을 띄운다.
+// (셀프테스트는 매번 새 프로세스로 열고 종료하므로 예외)
 const gotLock = SELFTEST ? true : app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
   app.on("second-instance", (event, argv) => {
     const f = fileArgFrom(argv);
-    const win = BrowserWindow.getAllWindows()[0];
-    if (win) {
-      if (win.isMinimized()) win.restore();
-      win.focus();
-      if (f) openFileInWindow(win, f);
+    if (f) {
+      const win = mruWindow();
+      if (win) {
+        if (win.isMinimized()) win.restore();
+        win.focus();
+        openFileInWindow(win, f);
+      } else {
+        pendingFile = f;      // 창이 하나도 없으면 새로 만들어 그 안에 연다
+        createWindow();
+      }
+    } else {
+      createWindow();         // 파일 없이 재실행 → 새 창
     }
   });
 
@@ -444,6 +580,7 @@ if (!gotLock) {
       return net.fetch(url.pathToFileURL(filePath).toString());
     });
 
+    if (!SELFTEST) buildAppMenu();   // 셀프테스트는 메뉴 없이 최소 구동
     createWindow();
 
     app.on("activate", () => {

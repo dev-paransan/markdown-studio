@@ -1086,7 +1086,9 @@ function inline(s){
   const plain = t => t.replace(/\u0000(\d+)\u0000/g, (_, i) => esc(codes[+i]))
                       .replace(/[\u0001\u0002](\d+)[\u0001\u0002]/g, "");
   const openA = (href, title) =>
-    T(`<a href="${href}" target="_blank" rel="noopener noreferrer"${title ? ` title="${title}"` : ""}>`);
+    /^#/.test(href)                                    // 문서 내부 앵커(#제목) — 새 창이 아니라 미리보기 안에서 스크롤
+      ? T(`<a href="${href}" class="md-anchor"${title ? ` title="${title}"` : ""}>`)
+      : T(`<a href="${href}" target="_blank" rel="noopener noreferrer"${title ? ` title="${title}"` : ""}>`);
   const autoA = (href, text) =>                        // 텍스트가 곧 주소인 자동 링크 — 통째로 가린다
     T(`<a href="${href}" target="_blank" rel="noopener noreferrer">${text}</a>`);
 
@@ -1334,10 +1336,27 @@ function langSelect(i, eff){
 }
 
 const BLOCK_TAGS = new Set("address article aside blockquote canvas caption col colgroup dd details div dl dt fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 header hgroup hr iframe li main math nav noscript ol p picture pre script section source style summary svg table tbody td tfoot th thead tr ul video audio".split(" "));
+/* 제목 앵커용 슬러그 — GitHub 방식(소문자화, 문장부호 제거, 공백→하이픈, 한글 등 문자는 유지).
+   문서 내부 링크 [가기](#제목)가 가리킬 id 를 헤딩에 붙인다. 같은 슬러그가 겹치면 -1,-2 를 단다.
+   slugCounts 는 top-level render() 마다 초기화하므로 미리보기·내보내기에서 같은 id 가 나온다. */
+let slugCounts = new Map();
+function slugify(html){
+  const text = String(html).replace(/<[^>]+>/g, "");    // 태그 제거 → 링크 텍스트 등만 남김
+  return text.trim().toLowerCase()
+    .replace(/[^\p{L}\p{N} \t_-]+/gu, "")                // 문자·숫자·공백·_·- 만 남김
+    .replace(/[ \t]+/g, "-");
+}
+function headingId(html){
+  const base = slugify(html) || "section";
+  const n = slugCounts.get(base) || 0;
+  slugCounts.set(base, n + 1);
+  return n ? `${base}-${n}` : base;
+}
+
 function render(src, top){
   const L = src.replace(/\r\n?/g, "\n").split("\n");
   let out = "", i = 0;
-  if(top) linkRefs = new Map();                       // 참조식 정의는 문서 단위로 다시 모은다
+  if(top){ linkRefs = new Map(); slugCounts = new Map(); }   // 참조식 정의·제목 슬러그를 문서 단위로 다시 모은다
   const refLines = collectLinkRefs(L, top);           // 정의 줄 자체는 본문에 찍지 않는다
 
   const listBlock = () => {
@@ -1440,7 +1459,7 @@ function render(src, top){
     }
 
     const h = ln.match(/^(#{1,6})\s+(.*)$/);                  // 제목
-    if(h){ const n = h[1].length; out += `<h${n}>${inline(h[2])}</h${n}>`; i++; continue; }
+    if(h){ const n = h[1].length, inner = inline(h[2]); out += `<h${n} id="${esc(headingId(inner))}">${inner}</h${n}>`; i++; continue; }
 
     if(/^\s*>/.test(ln)){                                      // 인용
       const buf = [];
@@ -2081,6 +2100,16 @@ preview.addEventListener("change", e => {
 
 /* 코드 블록 복사 */
 preview.addEventListener("click", async e => {
+  const a = e.target.closest("a.md-anchor");           // 문서 내부 링크 → 미리보기 안에서 해당 제목으로 스크롤
+  if(a){
+    e.preventDefault();
+    let id = (a.getAttribute("href") || "").slice(1);
+    try{ id = decodeURIComponent(id); }catch{}
+    const t = id && [...preview.querySelectorAll("[id]")].find(el => el.id === id);
+    if(t) t.scrollIntoView({ behavior: "smooth", block: "start" });
+    else toast("이동할 위치(" + id + ")를 찾지 못했습니다.");
+    return;
+  }
   const b = e.target.closest(".cp"); if(!b) return;
   const code = b.closest(".cb").querySelector("code");   // 버튼은 .cb-bar 안, <code>는 형제 <pre> 안
   if(!code) return;
