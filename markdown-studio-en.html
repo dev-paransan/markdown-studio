@@ -270,23 +270,22 @@
   }
   #toast.on{opacity:1;transform:translate(-50%,0)}
 
-  /* 저장 형식 메뉴 · 폴더 안 파일 목록 메뉴 */
-  #saveMenu,#folderMenu{
+  /* 저장 형식 메뉴 */
+  #saveMenu{
     position:fixed;z-index:60;min-width:190px;max-height:70vh;overflow:auto;padding:5px;
     background:#fff;border:1px solid var(--rule);border-radius:10px;
     box-shadow:0 14px 34px rgba(22,32,43,.18);
   }
-  #saveMenu[hidden],#folderMenu[hidden]{display:none}
-  #saveMenu .mi,#folderMenu .mi{
+  #saveMenu[hidden]{display:none}
+  #saveMenu .mi{
     display:flex;align-items:center;gap:10px;width:100%;text-align:left;
     padding:8px 10px;border-radius:7px;font-size:13px;color:var(--text);
   }
-  #saveMenu .mi:hover,#folderMenu .mi:hover{background:var(--sb-hover)}
-  #saveMenu .mi svg,#folderMenu .mi svg{flex:0 0 16px;opacity:.65}
-  #saveMenu .mi:hover svg,#folderMenu .mi:hover svg{opacity:1;color:var(--accent)}
+  #saveMenu .mi:hover{background:var(--sb-hover)}
+  #saveMenu .mi svg{flex:0 0 16px;opacity:.65}
+  #saveMenu .mi:hover svg{opacity:1;color:var(--accent)}
   #saveMenu .mi .ext{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--sb-dim)}
   #saveMenu .mi-sep{height:1px;background:var(--rule);margin:4px 6px}
-  #folderMenu .mi-empty{padding:10px;font-size:12.5px;color:var(--muted)}
 
   #drop{
     position:fixed;inset:0;z-index:50;display:none;place-items:center;
@@ -325,10 +324,6 @@
   #tmplModal .tm-btn{padding:9px 16px;border-radius:9px;font-size:13px;font-weight:500;background:var(--ink);color:#fff;border:1px solid var(--ink)}
   #tmplModal .tm-btn.ghost{background:#fff;color:var(--text);border-color:var(--rule)}
   #tmplModal .tm-btn.ghost:hover{background:var(--sb-hover)}
-
-  /* On the desktop (Electron) app "Open Folder" is unnecessary, so hide it.
-     Relative-path images are replaced by inline image insertion (base64 embed). */
-  body.desktop [data-a="openfolder"]{display:none !important}
 
   /* Print preview modal — shows the real print (paper) layout in-app before printing/PDF */
   #printModal{position:fixed;inset:0;z-index:80;display:flex;flex-direction:column}
@@ -496,7 +491,7 @@
     }
     #sidebar .act:active{color:var(--accent)}
     #sidebar .act.m-only{display:flex}
-    #sidebar .act.d-only{display:none}          /* 편집용 열기·폴더에서 열기·인쇄·문법 가이드: 모바일 숨김 */
+    #sidebar .act.d-only{display:none}          /* 인쇄·문법 가이드 등 데스크톱 전용: 모바일 숨김 */
     #sidebar .act .lbl,#sidebar .act .key{display:none}
     #sidebar .act svg{display:none}             /* 아이콘 숨김 → 텍스트로 대체 */
     #sidebar .act::after{content:attr(data-mtitle);font-size:13.5px;font-weight:500;color:currentColor;white-space:nowrap}
@@ -586,10 +581,6 @@
     <button class="act" data-a="openro" title="Open — opens in viewer mode (switch to edit with ⌘E or the status bar)" data-mtitle="Open">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
       <span class="lbl">Open</span><span class="key">⌘O</span>
-    </button>
-    <button class="act d-only" data-a="openfolder" title="Open from folder — also shows relative-path images (Chrome/Edge)" aria-haspopup="menu">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h3.5l1.5 2H19a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="8.3" cy="12" r=".9"/><path d="M6.3 16.7l2.7-2.7 1.8 1.8 3.4-3.4 2.3 2.3"/></svg>
-      <span class="lbl">Open folder</span>
     </button>
     <button class="act m-only" data-a="recents" title="Recent documents" data-mtitle="Recents">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
@@ -725,8 +716,6 @@
     <span>PDF (print)</span><span class="ext">.pdf</span>
   </button>
 </div>
-
-<div id="folderMenu" role="menu" aria-label="Markdown files in the folder" hidden></div>
 
 <div id="tmplModal" hidden>
   <div class="tm-scrim"></div>
@@ -1995,64 +1984,6 @@ async function openDoc(ro = false){
 }
 const openRO = () => openDoc(true);
 
-/* 폴더에서 열기 — 대화상자 1개(폴더 선택)로 파일 + 이미지 폴더 접근을 함께 받는다.
-   폴더 선택창은 구조상 특정 파일을 지정해 돌려줄 수 없으므로, 폴더 안의 마크다운 파일 목록은
-   네이티브 창이 아니라 #folderMenu(앱 안 목록)로 보여주고 고르게 한다. */
-async function openFromFolder(btn){
-  if(typeof window.showDirectoryPicker !== "function"){
-    toast("This browser doesn’t support open-from-folder (Chrome/Edge only).");
-    return;
-  }
-  let dir;
-  try{ dir = await window.showDirectoryPicker({ mode: "readwrite" }); }
-  catch{ return; }                                      // 사용자가 취소
-  const files = [];
-  for await (const [name, h] of dir.entries()){
-    if(h.kind === "file" && MD_RE.test(name)) files.push({ name, handle: h });
-  }
-  files.sort((a, b) => a.name.localeCompare(b.name, "ko"));
-  if(!files.length){ toast("No Markdown files in this folder."); return; }
-  if(files.length === 1) return openFolderEntry(files[0], dir);
-  openFolderMenu(btn, files, dir);
-}
-async function openFolderEntry(entry, dir){
-  for(const d of docs) if(d.handle && await d.handle.isSameEntry(entry.handle)){ select(d.id); return; }
-  const text = await (await entry.handle.getFile()).text();
-  const d = { id: uid(), name: entry.name, text, dirty: false, handle: entry.handle, readonly: false, dir };
-  docs.push(d); await touchRecent(d); select(d.id);
-  toast(`${entry.name} opened · relative-path images in this folder are now linked.`);
-}
-const folderMenu = $("#folderMenu");
-function openFolderMenu(btn, files, dir){
-  folderMenu.innerHTML = files.map((f, i) =>
-    `<button class="mi" data-i="${i}" role="menuitem">` +
-    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>` +
-    `<span>${esc(f.name)}</span></button>`
-  ).join("");
-  folderMenu._files = files; folderMenu._dir = dir;
-  folderMenu.hidden = false;
-  const r = btn.getBoundingClientRect();
-  const mw = folderMenu.offsetWidth, mh = folderMenu.offsetHeight;
-  let left = r.right + 6, top = r.top;
-  if(left + mw > innerWidth - 8) left = Math.max(8, r.left - mw - 6);
-  if(top + mh > innerHeight - 8) top = Math.max(8, innerHeight - mh - 8);
-  folderMenu.style.left = left + "px";
-  folderMenu.style.top = top + "px";
-}
-function closeFolderMenu(){ folderMenu.hidden = true; }
-folderMenu.addEventListener("click", e => {
-  const mi = e.target.closest(".mi"); if(!mi) return;
-  const entry = folderMenu._files[+mi.dataset.i], dir = folderMenu._dir;
-  closeFolderMenu();
-  openFolderEntry(entry, dir);
-});
-document.addEventListener("click", e => {
-  if(folderMenu.hidden) return;
-  if(e.target.closest("#folderMenu") || e.target.closest('[data-a="openfolder"]')) return;
-  closeFolderMenu();
-});
-window.addEventListener("keydown", e => { if(e.key === "Escape") closeFolderMenu(); });
-window.addEventListener("resize", closeFolderMenu);
 $("#picker").addEventListener("change", async e => {            // 폴백 경로
   const ro = e.target.dataset.ro === "1";
   for(const f of e.target.files){
@@ -2370,35 +2301,26 @@ $("#imgPicker").addEventListener("change", async e => {
    원본 주소를 그대로 둔다(그 이미지만 외부 링크로 남음). {total, failed} 반환 */
 /* ─────────── 로컬 상대경로 이미지 ───────────
    .md 파일 자체는 단일 파일 핸들만 가지므로, 같은 폴더의 상대경로 이미지(예: ![](사진.png))는
-   원래 읽을 방법이 없다. 문서에 그런 참조가 있으면 열기 직후 폴더 접근 권한을 한 번 더 요청해서
-   (d.dir) 미리보기 렌더 후 해당 <img>의 src를 실제 파일의 blob: URL로 바꿔치기한다. */
+   웹에서는 읽을 방법이 없다. 데스크톱 앱에서만 문서 파일이 있는 폴더(d.nativePath) 기준으로
+   미리보기 렌더 후 해당 <img>의 src를 data URI 로 바꿔치기한다. */
 function isLocalRelativeImageSrc(src){
   return !!src && !/^(https?:|data:|blob:)/i.test(src)
     && !/^[a-zA-Z]:[\\/]/.test(src) && !src.startsWith("/") && !src.startsWith("\\");
 }
-async function resolveImageInDir(dir, relPath){
-  const parts = decodeURIComponent(relPath).split(/[\\/]/).filter(p => p && p !== ".");
-  let node = dir;
-  for(let i = 0; i < parts.length - 1; i++) node = await node.getDirectoryHandle(parts[i]);
-  const file = await (await node.getFileHandle(parts[parts.length - 1])).getFile();
-  return URL.createObjectURL(file);
-}
-/* 현재 미리보기에 그려진 <img> 중 상대경로인 것들을 d.dir 기준으로 찾아 src를 갈아끼운다 */
+/* 현재 미리보기에 그려진 <img> 중 상대경로인 것들을 데스크톱 문서 폴더(d.nativePath) 기준으로
+   찾아 src 를 갈아끼운다 */
 let localImagesReady = Promise.resolve();           // 상대경로 이미지 치환이 끝나는 시점(내보내기가 기다린다)
 function resolveLocalImages(d){
-  const dir = d && d.dir;                                        // '폴더에서 열기'(Chrome·Edge)로 받은 폴더 핸들
-  const base = !dir && d && d.nativePath && window.mdsNative
+  const base = d && d.nativePath && window.mdsNative
     && typeof window.mdsNative.readImage === "function" ? d.nativePath : null;   // 데스크톱: 문서 파일이 있는 폴더
-  if(!dir && !base) return localImagesReady = Promise.resolve();
+  if(!base) return localImagesReady = Promise.resolve();
   d.imgCache ||= new Map();
   const jobs = [];
   preview.querySelectorAll("img").forEach(im => {
     const src = im.getAttribute("src");
     if(!isLocalRelativeImageSrc(src)) return;
     if(d.imgCache.has(src)){ im.src = d.imgCache.get(src); return; }
-    const load = dir
-      ? resolveImageInDir(dir, src)
-      : window.mdsNative.readImage(base, src).then(r => { if(!r || !r.ok) throw 0; return r.dataUrl; });
+    const load = window.mdsNative.readImage(base, src).then(r => { if(!r || !r.ok) throw 0; return r.dataUrl; });
     jobs.push(load.then(url => {
       d.imgCache.set(src, url);
       if(im.isConnected) im.src = url;
@@ -3009,12 +2931,23 @@ function closeDoc(id){
   } else drawTabs();
 }
 
+/* 사이드바 버튼(data-a)의 동작을 한 곳에서 처리한다. 클릭 위임과 데스크톱 메뉴바
+   (Electron '파일' 메뉴 → window.__mdsAction)가 이 맵을 공유한다. btn 은 위치 기준이
+   필요한 팝업(saveas)용이며, 메뉴에서 호출하면 없을 수 있어 해당 핸들러가
+   기본값(사이드바 버튼)으로 대체한다. */
+function runAction(a, btn){
+  const map = { new: newDoc, open: () => openDoc(false), openro: openRO,
+    save: saveDoc, saveas: () => openSaveMenu(btn), print: exportPdf, guide: openGuide,
+    recents: openSheet, template: openTmpl, image: pickImage,
+    close: () => active && closeDoc(active) };
+  const fn = map[a]; if(fn) fn();
+}
 document.body.addEventListener("click", e => {
   const b = e.target.closest("[data-a]"); if(!b) return;
-  ({ new: newDoc, open: () => openDoc(false), openro: openRO, openfolder: () => openFromFolder(b), save: saveDoc,
-     saveas: () => openSaveMenu(b), print: exportPdf, guide: openGuide, recents: openSheet, template: openTmpl,
-     image: pickImage, close: () => active && closeDoc(active) })[b.dataset.a]();
+  runAction(b.dataset.a, b);
 });
+// 데스크톱 메뉴바에서 사이드바 동작을 호출하는 훅 (Electron main.js 의 '파일' 메뉴).
+window.__mdsAction = a => runAction(a);
 
 /* ─────────── 편집기 이벤트 ─────────── */
 editor.addEventListener("input", () => {

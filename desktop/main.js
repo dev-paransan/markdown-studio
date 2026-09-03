@@ -235,12 +235,34 @@ function mruWindow() {
 // ── 애플리케이션 메뉴 ────────────────────────────────────────
 // 메뉴 단축키는 웹 앱(렌더러)이 쓰는 것과 겹치지 않게 고른다. 렌더러가 이미 쓰는
 // Ctrl+S/N/O/E/W/B/P·⇧ 조합은 피하고, 새 창은 Ctrl+Shift+N 을 쓴다.
+// 사이드바 동작(data-a)을 포커스된 창의 렌더러에서 실행한다. 렌더러가 노출한
+// window.__mdsAction 훅(runAction)을 호출하므로 사이드바 버튼과 완전히 같은 코드로 동작한다.
+// 단축키는 렌더러가 이미 처리(Ctrl+S/N/O/P·⌘/)하므로 메뉴에는 가속기를 달지 않는다
+// (달면 메뉴가 키를 가로채 렌더러 핸들러와 충돌한다 — 상단 주석 참고).
+function runSidebarAction(a) {
+  const win = BrowserWindow.getFocusedWindow() || mruWindow();
+  if (win && !win.isDestroyed())
+    win.webContents
+      .executeJavaScript(`window.__mdsAction && window.__mdsAction(${JSON.stringify(a)})`, true)
+      .catch(() => {});
+}
+
 function buildAppMenu() {
   const template = [
     {
       label: "파일(&F)",
       submenu: [
         { label: "새 창", accelerator: "CmdOrCtrl+Shift+N", click: () => createWindow() },
+        { type: "separator" },
+        { label: "만들기", click: () => runSidebarAction("new") },
+        { label: "열기", click: () => runSidebarAction("openro") },
+        { label: "이미지 삽입", click: () => runSidebarAction("image") },
+        { type: "separator" },
+        { label: "저장", click: () => runSidebarAction("save") },
+        { label: "다른 이름으로 저장 · 내보내기", click: () => runSidebarAction("saveas") },
+        { label: "인쇄 · PDF", click: () => runSidebarAction("print") },
+        { type: "separator" },
+        { label: "문법 가이드", click: () => runSidebarAction("guide") },
         { type: "separator" },
         { role: "close", label: "창 닫기", accelerator: "CmdOrCtrl+Shift+W" },
         { role: "quit", label: "종료" },
