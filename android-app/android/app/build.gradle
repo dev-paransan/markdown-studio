@@ -37,8 +37,11 @@ android {
     }
     buildTypes {
         release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // R8 코드 축소 + 리소스 축소. 미사용 androidx/플러그인 코드·리소스를 제거해
+            // dex·res 용량을 줄인다. Capacitor 리플렉션 보호 규칙은 proguard-rules.pro 참고.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             // keystore.properties 가 있을 때만 서명 설정을 붙인다(없으면 미서명 빌드).
             if (keystoreProps.containsKey("storeFile")) {
                 signingConfig signingConfigs.release
